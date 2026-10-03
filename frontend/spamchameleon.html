@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="Spam Detector web application">
+  <meta name="keywords" content="Spam, Detector, Chameleon">
+  <meta name="author" content="Dang Nguyen Xuan Truc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpamChameleon</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@700&family=Noto+Sans:wght@400;700&family=Sedgwick+Ave&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="spamstyle.css">
+</head>
+<body>
+
+  <header class="headah">
+    <a class="logo" href="index.html">
+      <span class="spamchameleon">SpamChameleon</span>
+      <i class="fa-brands fa-opensuse"></i>
+    </a>
+
+    <button type="button" class="butt aboutus" id="aboutbutt">
+      about us <i class="fa-solid fa-circle-info"></i>
+    </button>
+  </header>
+
+  <main class="main" id="main">
+    <!--dah left side panel showing result-->
+    <aside class="sidepanel" id="sidepanel" hidden>
+      <div>
+        <h2 class="resulttitle">
+          <span id="resulttext">IT IS A SPAM</span>
+          <i class="fa-solid fa-flag result-flag" id="resultflag"></i>
+        </h2>
+        <p class="sus">SUS words:</p>
+        <ul class="suslist" id="suslist"></ul>
+      </div>
+      <button type="button" class="butt closebutt" id="closebutt">Close</button>
+    </aside>
+
+    <!-- main "SPAM OR HAM ?" detection box-->
+    <section class="detector" id="detector">
+      <h1 class="detitle">SPAM or HAM ?</h1>
+
+      <div class="inputbox">
+        <textarea id="input" placeholder="Insert your email or text message in here..."></textarea>
+        <button type="button" class="butt checkbutt" id="checkbutt" disabled>Check</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <p>&copy; 2026 SpamChameleon</p>
+    <a href="mailto:trucdnx@gmail.com" class="mail">
+      <i class="fa-regular fa-envelope"></i> trucdnx@gmail.com
+    </a>
+  </footer>
+
+  <!-- ===== About Us modal ===== -->
+  <div class="AUbox" id="AUbox" hidden>
+    <div class="AUinfo" role="dialog">
+      <h2 id="AUtitle">About SpamChameleon</h2>
+      <p>Xin Chao!!! This is a university machine-learning project that detect any <strong>SPAM</strong> email or text message.</p>
+      <p>Paste a message, press <strong>Check</strong>, and the app shows the verdict together with the suspicious words behind it.</p>
+      <button type="button" class="butt closebutt" id="aboutclose">Close</button>
+    </div>
+  </div>
+
+  <script src="spampage.js"></script>
+</body>
+</html>
