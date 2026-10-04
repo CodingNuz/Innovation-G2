@@ -10,12 +10,9 @@ async fn main() {
     // Parse template once at startup, share the compiled env across every request instead of rebuild it perhit
     let env = build_env();
     let app = Router::new()
-        .route("/", get(root))
-        .route("/introduction", get(about))
-        .route("/tryit", get(tryit))
-        .nest_service(
-            "/static",
-            ServeDir::new(concat!(env!("CARGO_MANIFEST_DIR"), "/static")),
+        .route("/", get(index))
+        .fallback_service(
+            ServeDir::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../frontend"))
         )
         .with_state(Arc::new(env));
 
@@ -34,14 +31,8 @@ async fn main() {
 fn build_env() -> Environment<'static> {
     let mut env = Environment::new();
     // Template only fails to syntax error, bad template become build-time bug not runtime
-    env.add_template("head.html", include_str!("../html/head.html"))
-        .expect("head.html must parse");
-    env.add_template("index.html", include_str!("../html/index.html"))
-        .expect("index.html must parse");
-    env.add_template("about.html", include_str!("../html/about.html"))
-        .expect("about.html must parse");
-    env.add_template("tryit.html", include_str!("../html/tryit.html"))
-        .expect("tryit.html must parse");
+    env.add_template("spamchameleon.html", include_str!("../../frontend/spamchameleon.html"))
+        .expect("spamchameleon.html must parse");
     env
 }
 
@@ -49,16 +40,8 @@ type AppState = Arc<Environment<'static>>;
 type Page = Result<Html<String>, (StatusCode, String)>;
 
 // Each handler pulls the shared env out of state and passes it to render
-async fn root(State(env): State<AppState>) -> Page {
-    Ok(Html(render(&env, "index.html", "Innovation G2")?))
-}
-
-async fn about(State(env): State<AppState>) -> Page {
-    Ok(Html(render(&env, "about.html", "About")?))
-}
-
-async fn tryit(State(env): State<AppState>) -> Page {
-    Ok(Html(render(&env, "tryit.html", "Try It")?))
+async fn index(State(env): State<AppState>) -> Page {
+    Ok(Html(render(&env, "spamchameleon.html", "Innovation G2")?))
 }
 
 // Templates were registered once in build_env; this looks one up and renders it
