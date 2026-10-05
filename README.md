@@ -1,3 +1,3 @@
 # Innovation-G2
 
-DitmeGiaKhang
+If you see this line, you are on the right repository
