@@ -2,6 +2,20 @@
 target/
 **/*.rs.bk
 
+# Folder
+spam_malware_detection_model_test
+
+# Large scratch datasets
+dataset_test/
+
+# Python environment and build artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+confusion_matrix.png
+train_report.txt
+
 # Editor / OS noise
 .DS_Store
 .vscode/
