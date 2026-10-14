@@ -1,12 +1,16 @@
+# Rubrik
+Assignment/
+
 # Rust build output
 target/
 **/*.rs.bk
 
 # Folder
-spam_malware_detection_model_test
+spam_malware_detection_model/spam_model.joblib
 
 # Large scratch datasets
-dataset_test/
+dataset/synthetic_test.csv
+dataset/train_dataset.csv
 
 # Python environment and build artifacts
 .venv/
@@ -20,3 +24,7 @@ train_report.txt
 .DS_Store
 .vscode/
 .idea/
+.zcodeignore
+
+# Analyze
+analysis/

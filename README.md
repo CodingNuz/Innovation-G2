@@ -4,11 +4,13 @@ If you see this line, you are on the right repository
 
 ## Spam / malware model
 
-In `Test_trained_ML_model/`: `spam_model.joblib` (Logistic Regression + TF-IDF, F1 0.947),
-`test_model.py` (runner), `requirements.txt` (dependencies).
+Hugging Face:
+
+- Model: https://huggingface.co/Skibidibois2000/spam-detection-model
+- Dataset: https://huggingface.co/datasets/Skibidibois2000/spam-detection-dataset
 
 ### How to use
-Recommend to run it in venv environment 
+Recommend to run it in venv environment
 
 ```bash
 .../.venv/bin/python \
@@ -26,7 +28,7 @@ Or in Python:
 ```python
 import joblib
 
-bundle = joblib.load("Test_trained_ML_model/spam_model.joblib")
+bundle = joblib.load("spam_malware_detection_model/spam_model.joblib")
 prob = bundle["model"].predict_proba(
     bundle["vectorizer"].transform(["your message here"])
 )[0][1]
