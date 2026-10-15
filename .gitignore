@@ -15,6 +15,7 @@ dataset/train_dataset.csv
 # Python environment and build artifacts
 .venv/
 venv/
+.venv_test/
 __pycache__/
 *.py[cod]
 confusion_matrix.png

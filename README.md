@@ -2,6 +2,15 @@
 
 If you see this line, you are on the right repository
 
+# Run Server
+
+'''bash
+cd innovation-g2
+python3 main.py
+# or
+uvicorn main:app --host 127.0.0.1 --port 3000
+'''
+
 ## Spam / malware model
 
 Hugging Face:
