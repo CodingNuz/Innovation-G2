@@ -6,11 +6,15 @@ target/
 **/*.rs.bk
 
 # Folder
-spam_malware_detection_model/spam_model.joblib
+spam_malware_detection_model/Spam_model/spam_model.joblib
+spam_malware_detection_model/Spam_model/spam_model.joblib.gz
+spam_malware_detection_model/Malware_model/regression_model.joblib
+
 
 # Large scratch datasets
 dataset/synthetic_test.csv
-dataset/train_dataset.csv
+dataset/spam_train_dataset.csv
+dataset/malware_train_dataset.csv
 
 # Python environment and build artifacts
 .venv/
