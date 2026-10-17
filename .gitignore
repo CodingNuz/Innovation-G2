@@ -5,16 +5,29 @@ Assignment/
 target/
 **/*.rs.bk
 
-# Folder
-spam_malware_detection_model/Spam_model/spam_model.joblib
-spam_malware_detection_model/Spam_model/spam_model.joblib.gz
-spam_malware_detection_model/Malware_model/regression_model.joblib
+# ---------------------------------------------------------------------------
+# Files too large to push to GitHub.
+#
+# GitHub warns above 50 MB and refuses anything over 100 MB in a single push.
+# Only the two files that cross those lines are listed here; every other data
+# file, and the trained model, are small enough to stay tracked so the
+# repository is self-contained.
+#
+# Both files below are rebuilt from the raw downloads by:
+#   python spam_malware_detection_model/build_datasets.py
+#   python spam_malware_detection_model/spam/clean_spam_dataset.py
+# and both are published on Hugging Face, so nothing is lost by leaving them
+# out of git. See the links in README.md.
+# ---------------------------------------------------------------------------
 
-
-# Large scratch datasets
-dataset/synthetic_test.csv
+# 240 MB. Over the 100 MB hard limit. Intermediate file: only
+# spam/clean_spam_dataset.py reads it, on the way to the file below.
 dataset/spam_train_dataset.csv
-dataset/malware_train_dataset.csv
+
+# 98 MB. Under the hard limit but well over the 50 MB warning, so every clone
+# would carry it. This is the file the spam model trains on, and it is on
+# Hugging Face.
+dataset/spam_train_clean.csv
 
 # Python environment and build artifacts
 .venv/
@@ -22,7 +35,6 @@ venv/
 .venv_test/
 __pycache__/
 *.py[cod]
-confusion_matrix.png
 train_report.txt
 
 # Editor / OS noise
@@ -31,5 +43,6 @@ train_report.txt
 .idea/
 .zcodeignore
 
-# Analyze
+# Exploratory work: scripts and reports kept for reference, not part of the
+# final model pipeline (which is spam_malware_detection_model/).
 analysis/

@@ -1,47 +1,70 @@
 # Innovation-G2
 
-If you see this line, you are on the right repository
+COS30049 group project: spam, malware and process detection with machine
+learning, served by a FastAPI web application.
 
-# Run Server
+## Run the server
 
 ```bash
 cd innovation-g2
-python3 main.py
-# or
-uvicorn main:app --host 127.0.0.1 --port 3000
+python main.py
 ```
 
-## Spam / malware model
+Then open <http://127.0.0.1:3000/> for the page and
+<http://127.0.0.1:3000/docs> for the API documentation.
 
-Hugging Face:
-
-- Model: https://huggingface.co/Skibidibois2000/spam-detection-model
-- Dataset: https://huggingface.co/datasets/Skibidibois2000/spam-detection-dataset
-
-### How to use
-Recommend to run it in venv environment
+The server needs pandas, scikit-learn and joblib as well as fastapi, because
+it loads the models. Install them first:
 
 ```bash
-.../.venv/bin/python \
-    Test_trained_ML_model/test_model.py "your message here"
-
-# or score a labelled CSV:
-.../.venv/bin/python \
-    Test_trained_ML_model/test_model.py --file dataset_test/emails.csv text spam
+conda env create -f spam_malware_detection_model/environment.yml
+conda activate spam-malware
 ```
 
-To run elsewhere: `pip install -r Test_trained_ML_model/requirements.txt`
+## Models
 
-Or in Python:
+Four models ship in one bundle, `spam_malware_detection_model/combined_model.joblib`
+(keys `spam`, `malware`, `regression`):
 
-```python
-import joblib
+| model | task | score (5-fold CV) | score on unseen data |
+| --- | --- | --- | --- |
+| spam | message text to ham/spam | F1 0.966 | F1 0.902 (unseen source) |
+| malware | file features to benign/malware, one model per platform | F1 0.886 to 0.992 | not applicable, the platform is chosen by the caller |
+| clustering | K-Means groups the messages with no labels | purity 0.732 | ARI 0.215 |
+| regression | process counters to context switches | R2 0.962 | MAE 954 against 6390 for the mean answer |
 
-bundle = joblib.load("spam_malware_detection_model/spam_model.joblib")
-prob = bundle["model"].predict_proba(
-    bundle["vectorizer"].transform(["your message here"])
-)[0][1]
-# prob >= bundle["threshold"] (0.5) means SPAM
+Training code, data processing and instructions:
+[spam_malware_detection_model/README.md](spam_malware_detection_model/README.md)
+
+## Data and reproducibility
+
+Every training file is rebuilt from the raw Kaggle downloads by one script:
+
+```bash
+python spam_malware_detection_model/build_datasets.py         # merge raw data
+python spam_malware_detection_model/spam/clean_spam_dataset.py # clean the text
+python spam_malware_detection_model/combined_model.py          # train and evaluate
 ```
 
-Note: trained on English SMS/email data only, so non-English text is unreliable.
+Sources, authors and licenses are listed in `dataset/Kaggle datasets source.md`
+and in the `INFO.md` file inside each source folder.
+
+## Notes
+
+- Both text models are trained on English SMS and email. Neither handles other
+  languages. SMS is the weakest part (F1 0.75 to 0.80 on an unseen SMS source).
+- Each malware model only understands its own platform's feature columns.
+
+## Published copies
+
+The model and the complete dataset are also on Hugging Face, for people who
+want the data without cloning the repository:
+
+- Model: <https://huggingface.co/Skibidibois2000/spam-malware-detection-model>
+- Dataset: <https://huggingface.co/datasets/Skibidibois2000/spam-malware-detection-dataset>
+
+The two largest files, `dataset/spam_train_dataset.csv` and
+`dataset/spam_train_clean.csv`, are not tracked in git because they exceed
+GitHub's size limits. Both are in the Hugging Face dataset above, and both can
+be rebuilt from the raw downloads with the three commands in
+[Data and reproducibility](#data-and-reproducibility).
