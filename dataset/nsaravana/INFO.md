@@ -24,6 +24,4 @@
   context switches) from the other counters. It is not used for malware
   classification, because a classifier here would identify which of the 100
   processes a row belongs to rather than anything about a file.
-- `spam_malware_detection_model/build_datasets.py` writes the compact
-  `dataset/nsaravana/process_train_dataset.csv` from this file; that derived file is the
-  one the model reads.
+- The training script reads this file as it is. There is no derived copy.

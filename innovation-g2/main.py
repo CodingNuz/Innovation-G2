@@ -25,7 +25,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND = ROOT / "frontend"
+
+# The React app in frontend-react/ is the current front end.  When it has been
+# built (npm run build) the build output is served here, so the whole app runs
+# from this one server.  frontend/ holds the older hand-written page and is
+# only used when no build output exists.
+REACT_BUILD = ROOT / "frontend-react" / "dist"
+FRONTEND = REACT_BUILD if (REACT_BUILD / "index.html").exists() else ROOT / "frontend"
 
 # The prediction code lives next to the trained models.
 sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
@@ -73,7 +79,10 @@ def check_spam(request: SpamRequest):
     """Classify one message as SPAM or HAM, with the words behind the verdict."""
     if not request.text.strip():
         raise HTTPException(400, "text is empty")
-    return predict.predict_spam(request.text)
+    try:
+        return predict.predict_spam(request.text)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
 
 
 @app.get("/api/malware/platforms")
@@ -94,6 +103,23 @@ def malware_features(platform: Optional[str] = None):
         raise HTTPException(400, str(error))
 
 
+@app.get("/api/malware/schema")
+def malware_schema(platform: Optional[str] = None):
+    """What each malware feature looks like, so a form can be built.
+
+    For every feature: its kind (a binary yes/no switch or a number), the
+    smallest and largest value in the training data, and the median, which is
+    the value the model imputes when a feature is left out.
+    """
+    try:
+        if platform:
+            return {platform: predict.malware_feature_schema(platform)}
+        return {name: predict.malware_feature_schema(name)
+                for name in predict.malware_platforms()}
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
 @app.post("/api/malware")
 def check_malware(request: MalwareRequest):
     """Classify one file as MALWARE or BENIGN for a named platform."""
@@ -106,7 +132,10 @@ def check_malware(request: MalwareRequest):
 @app.post("/api/process")
 def predict_process(request: ProcessRequest):
     """Predict the voluntary context-switch count of a process (regression)."""
-    return predict.predict_process(request.features)
+    try:
+        return predict.predict_process(request.features)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
 
 
 @app.get("/api/process/features")
@@ -115,9 +144,18 @@ def process_features():
     return predict.process_feature_names()
 
 
+@app.get("/api/process/schema")
+def process_schema():
+    """What each process counter looks like: range and the imputed median."""
+    return predict.process_feature_schema()
+
+
 @app.get("/")
 async def index():
-    return FileResponse(FRONTEND / "spamchameleon.html")
+    # The React build starts at index.html; the older hand-written page starts
+    # at spamchameleon.html.
+    page = "index.html" if FRONTEND == REACT_BUILD else "spamchameleon.html"
+    return FileResponse(FRONTEND / page)
 
 
 # Mount last: StaticFiles at "/" must not shadow the "/" route above.

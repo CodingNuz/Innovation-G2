@@ -5,3 +5,6 @@ scikit-learn
 pandas
 numpy
 joblib
+# tests (python -m pytest test_api.py)
+httpx
+pytest
