@@ -46,3 +46,7 @@ train_report.txt
 # Exploratory work: scripts and reports kept for reference, not part of the
 # final model pipeline (which is spam_malware_detection_model/).
 analysis/
+
+# The Roblox-style 3D world. It is a separate part of the work with its own
+# README in frontend-roblox/README.md, and it is not part of this project.
+frontend-roblox/

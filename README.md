@@ -107,9 +107,9 @@ spam text is run and scored by the training script and is not saved:
 
 | model | task | score (5-fold CV) | score on unseen data |
 | --- | --- | --- | --- |
-| spam | message text to ham/spam | F1 0.968 | F1 0.898 (unseen source) |
+| spam | message text to ham/spam | F1 0.979 | F1 0.912 (unseen source) |
 | malware | file features to benign/malware, one model per platform | F1 0.886 to 0.992 | Windows files from a new source: F1 0.75 to 0.89; the platform is chosen by the caller |
-| regression | process counters to context switches | R2 0.974 | MAE 815 against 6390 for the mean answer |
+| regression | process counters to context switches | R2 0.979 | MAE 742 against 6390 for the mean answer |
 
 Training code, data processing and instructions:
 [spam_malware_detection_model/README.md](spam_malware_detection_model/README.md)
@@ -138,6 +138,20 @@ and in the `INFO.md` file inside each source folder.
   languages. SMS is the weakest part (F1 0.745 to 0.785 on an unseen SMS source,
   and about 0.38 precision on ordinary SMS where 9% of messages are spam).
 - Each malware model only understands its own platform's feature columns.
+- **Scanning a file.** `POST /api/malware/upload` (also the "Scan a file" box on the
+  malware screen) takes a Windows `.exe`/`.dll` or an Android `.apk`. The platform is
+  detected from the bytes: `pefile` reads the 50 PE header fields, `androguard` reads the
+  manifest permissions and the API calls in every `classes.dex`. An APK is scored by the
+  three Android models and the majority vote is the verdict. The file is parsed and never
+  run. The models are unchanged, so they keep their limits: a clean 64-bit or unusual PE
+  can score as malware (the Windows model reaches F1 0.75 to 0.89 on files from a new
+  source), and only the features that the file itself provides are used.
+  ```bash
+  curl -F file=@sample.apk http://127.0.0.1:3000/api/malware/upload
+  ```
+  The upload is read, never run, and the file is not kept. The `python-multipart`,
+  `pefile` and `androguard` packages it needs are in `innovation-g2/requirements.txt`
+  and in `spam_malware_detection_model/environment.yml`.
 
 ## Published copies
 

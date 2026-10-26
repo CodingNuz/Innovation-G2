@@ -5,6 +5,7 @@ Routes:
     GET  /api/malware/platforms      -> platform names
     GET  /api/malware/features       -> feature columns (all, or ?platform=)
     POST /api/malware                {"platform", "features"} -> verdict
+    POST /api/malware/upload         multipart file (+ optional platform) -> verdict
     POST /api/process                {"features"} -> predicted context switches
     GET  /api/model                  -> what is inside the saved bundle
     GET  /api/health                 -> readiness, for a load balancer
@@ -20,7 +21,7 @@ from typing import Dict, Optional
 
 import uvicorn
 import pymupdf
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -37,6 +38,11 @@ FRONTEND = REACT_BUILD if (REACT_BUILD / "index.html").exists() else ROOT / "fro
 # The prediction code lives next to the trained models.
 sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
 import predict  # noqa: E402
+import extract  # noqa: E402
+
+# The largest upload accepted.  Real APKs are tens of megabytes; anything
+# bigger is refused before it is parsed.
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 app = FastAPI(
     title="Spam and Malware Detection API",
@@ -163,6 +169,26 @@ def check_malware(request: MalwareRequest):
     """Classify one file as MALWARE or BENIGN for a named platform."""
     try:
         return predict.predict_malware(request.platform, request.features)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
+@app.post("/api/malware/upload")
+def upload_malware(file: UploadFile = File(...), platform: Optional[str] = Form(None)):
+    """Scan an uploaded Windows PE (.exe, .dll) or Android APK.
+
+    The platform is worked out from the file's bytes.  The features are read
+    from the file and given to the same models as POST /api/malware.  An APK
+    is scored by the three Android models, whose majority vote is the verdict.
+    Pass `platform` only to force one model.  The file is parsed, never run.
+    """
+    data = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "file is larger than %d MB" % (MAX_UPLOAD_BYTES >> 20))
+    try:
+        return extract.scan(data, file.filename or "", platform or None)
+    except extract.UnsupportedFile as error:
+        raise HTTPException(415, str(error))
     except ValueError as error:
         raise HTTPException(400, str(error))
 

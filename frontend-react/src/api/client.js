@@ -82,6 +82,7 @@ export function apiPost(path, body) {
   })
 }
 
+
 /** POST a PDF file to the API. */
 export async function apiUpload(path, file) {
   const formData = new FormData()
@@ -107,6 +108,7 @@ export const api = {
     apiGet(`/api/malware/schema?platform=${encodeURIComponent(platform)}`),
   malware: (platform, features) =>
     apiPost('/api/malware', { platform, features }),
+  malwareUpload: (file) => apiUpload('/api/malware/upload', file),
   processFeatures: () => apiGet('/api/process/features'),
   processSchema: () => apiGet('/api/process/schema'),
   process: (features) => apiPost('/api/process', { features }),

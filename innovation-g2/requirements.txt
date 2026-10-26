@@ -5,6 +5,9 @@ scikit-learn
 pandas
 numpy
 joblib
+python-multipart
+pefile
+androguard
 # tests (python -m pytest test_api.py)
 httpx
 pytest
