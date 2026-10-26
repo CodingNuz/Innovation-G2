@@ -82,11 +82,24 @@ export function apiPost(path, body) {
   })
 }
 
+/** POST a PDF file to the API. */
+export async function apiUpload(path, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request(path, {
+    method: 'POST',
+    headers: {},
+    body: formData,
+  })
+}
+
 // The endpoints the app uses, one function each.
 export const api = {
   health: () => apiGet('/api/health'),
   model: () => apiGet('/api/model'),
   spam: (text) => apiPost('/api/spam', { text }),
+  spamUpload: (file) => apiUpload('/api/spam/upload', file),
   malwarePlatforms: () => apiGet('/api/malware/platforms'),
   malwareFeatures: (platform) =>
     apiGet(`/api/malware/features?platform=${encodeURIComponent(platform)}`),

@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+import pymupdf
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -83,6 +84,43 @@ def check_spam(request: SpamRequest):
         return predict.predict_spam(request.text)
     except ValueError as error:
         raise HTTPException(400, str(error))
+
+@app.post("/api/spam/upload")
+async def check_spam_pdf(file: UploadFile = File(...)):
+   
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Upload PDF file.")
+
+    try:
+        content = await file.read()
+
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "File maximum size is 10 MB.")
+
+        if not content:
+            raise HTTPException(400, "File is empty.")
+
+        with pymupdf.open(stream=content, filetype="pdf") as pdf:
+            text = "\n".join(page.get_text() for page in pdf)
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"PDF parsing error: {type(error).__name__}: {error}")
+        raise HTTPException(400, "Unable to read file.")
+
+    if not text.strip():
+        raise HTTPException(
+            400,
+            "No readable text."
+        )
+
+    try:
+        return predict.predict_spam(text)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    finally:
+        await file.close()
 
 
 @app.get("/api/malware/platforms")

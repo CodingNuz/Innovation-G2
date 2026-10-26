@@ -22,9 +22,10 @@ export default function SpamView() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [file, setFile] = useState(null)
 
   const trimmed = text.trim()
-  const canCheck = trimmed.length > 0 && !busy
+  const canCheck = (trimmed.length > 0 || file !== null) && !busy
 
   async function check(event) {
     event?.preventDefault()
@@ -33,7 +34,9 @@ export default function SpamView() {
     setBusy(true)
     setError(null)
     try {
-      const reply = await api.spam(trimmed)
+      const reply = file
+        ? await api.spamUpload(File)
+        : await api.spam(trimmed)
       setResult(reply)
     } catch (apiError) {
       setResult(null)
@@ -149,6 +152,14 @@ export default function SpamView() {
           <button type="submit" className="butt checkbutt" disabled={!canCheck}>
             {busy ? '...' : 'Check'}
           </button>
+        </div>
+
+        <div className="pdf-upload">
+          <label htmlFor="spam-pdf">Upload email as a PDF:</label>
+          <input
+            id="spam-pdf" type="file" accept=".pdf,application/pdf"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          />
         </div>
 
         <div className="examples">

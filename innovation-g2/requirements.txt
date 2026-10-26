@@ -8,3 +8,5 @@ joblib
 # tests (python -m pytest test_api.py)
 httpx
 pytest
+PyMuPDF
+python-multipart
