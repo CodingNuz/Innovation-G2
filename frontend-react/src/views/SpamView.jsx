@@ -35,7 +35,7 @@ export default function SpamView() {
     setError(null)
     try {
       const reply = file
-        ? await api.spamUpload(File)
+        ? await api.spamUpload(file)
         : await api.spam(trimmed)
       setResult(reply)
     } catch (apiError) {
