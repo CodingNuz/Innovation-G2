@@ -23,7 +23,7 @@ learning models that help with both, and puts them behind a small web service.
 **Intended users.** People who receive suspicious messages, such as students
 and office staff, and the security staff who check suspicious files for them.
 The spam model gives a verdict plus the words that caused it, so a non-expert
-can see why a message looks bad. The malware model gives a verdict and a
+can see why a message looks bad; the malware model gives a verdict and a
 probability for the analyst.
 
 ## 2. Problem framing
@@ -33,16 +33,14 @@ legitimate (0). This is binary classification.
 
 **Malware.** Given numeric features taken from a file (for example PE header
 fields of a Windows program, or the permissions an Android app asks for),
-decide whether it is malware (1) or benign (0). This is also binary
-classification.
+decide whether it is malware (1) or benign (0). Also binary classification.
 
 **Limits of existing solutions.** Fixed rule lists (block "free prize") are
 easy to get around, and signature scanners only know samples seen before. A
 model trained on many examples can pick up patterns across thousands of
 messages and files, and it can be retrained when attackers change. The signal
-is spread over many small clues (a word, a header value, a permission), none
-of which is enough alone, and models are good at weighing many weak clues
-together.
+is spread over many small clues, none of which is enough alone, and models are
+good at weighing many weak clues together.
 
 **Goal and measure.** F1 score above 0.90 on data the model has never seen,
 because a model that only works on its own training data is of no use to a
@@ -70,19 +68,13 @@ tool (`kaggle datasets download -d <owner>/<name>`). Licenses are recorded in
 | android_drebin | 7,257 | 215 | Drebin-215 (Arp et al. 2014) |
 | android_permissions | 7,379 | 86 | NATICUSdroid |
 | android_tuandromd | 660 | 241 | TUANDROMD (Borah et al. 2020) |
+| process snapshots | 100,000 | 32 counters | Kaggle "Malware Detection" (Saravana); target `nvcsw`, 100 processes x 1,000 snapshots |
 
 The feature counts are the columns as downloaded. Constant columns are dropped
 before training, leaving 50, 215, 86 and 199 columns.
 
-**Process snapshots (1 dataset, 100,000 rows) for the regression task.**
-
-| rows | processes | features | target | origin |
-| --- | --- | --- | --- | --- |
-| 100,000 | 100 | 32 counters | `nvcsw` | Kaggle "Malware Detection" (Saravana) |
-
 We used many sources so the model sees different kinds of text, files and
-processes. This helped, and also created the main difficulty of the project
-(section 4).
+processes. This helped, and also created the main difficulty (section 4).
 
 **Challenges.** Label meanings differed between files (`B`/`S`, `goodware`/
 `malware`, `0`/`1`) and were checked by reading sample rows before merging. One
@@ -91,13 +83,12 @@ same samples listed them under different identifier columns (`SHA256` and
 `Name`), so the merge deduplicates on the feature values themselves.
 Several sets were rejected after checking: `ang3loliveira` (96 to 97% malware,
 no benign class to learn from), an Android permission set where 1,927 packages
-carry both labels, and a Singapore SMS corpus with no label column at all.
+carry both labels, and a Singapore SMS corpus with no label column.
 
 The `nsaravana/malware` file was first rejected for classification, because
 each of its 100 processes is repeated 1,000 times and every snapshot of a
-process carries the same label, so a classifier would learn to identify the
-process. Rather than discard 100,000 rows, we gave the file the task it can
-honestly support: regression (section 4.3).
+process carries the same label. Rather than discard 100,000 rows, we gave the
+file the task it can honestly support: regression.
 
 ## 4. Data processing and analysis
 
@@ -109,13 +100,13 @@ honestly support: regression (section 4.3).
    `0`, and drop quoted replies, month names and years. This is `scrub()` in
    `textclean.py`; `predict.py` imports the same function, so a message typed
    into the website is cleaned the way the training texts were. Month names
-   are matched as whole words (a first version also deleted "junk" and "market").
+   are matched as whole words, so "junk" and "market" survive.
 2. Remove empty texts, and texts that appear with both labels.
 3. Remove duplicates, ignoring case and punctuation. This runs after step 1,
    because scrubbing makes many different messages identical.
 4. Balance each source: the same number of spam and ham texts, at most 10,000
    of each. 87,798 messages remain. The spam share each source had before this
-   step is saved, because the balanced test sets hide it (section 6.2).
+   step is saved, because the balanced test sets hide it.
 
 **Why steps 1 and 4.** Our first model scored F1 0.949 in cross-validation, but
 its strongest "ham" words were `enron`, `wrote`, `opensuse` and `vince`, and its
@@ -123,13 +114,11 @@ strongest "spam" words were `aug`, `2004` and `cnn`. These identify the corpus,
 not the message. **Leave-one-source-out** validation (train on seven sources,
 test on the eighth) exposed it: F1 on an unseen SMS source fell to 0.47 and
 0.66. Balancing each source and scrubbing the clues raised the mean
-unseen-source F1 from 0.81 to 0.90. Raising the per-source cap to 10,000 rows
-helped a little more.
+unseen-source F1 from 0.81 to 0.90.
 
-**Analysis.** Figure 1 (`1_spam_sources.png`) shows messages per source after
-balancing. Figure 2 shows that ham messages are longer on average (248 words)
-than spam (162 words). Figure 4 shows the words the final model uses. Figure 5
-shows the regression target and the counters that track it.
+**Analysis.** Figure 1 shows messages per source after balancing. Figure 2
+shows that ham messages are longer on average (248 words) than spam (162
+words). Figure 4 shows the words the final model uses.
 
 ### 4.2 Malware
 
@@ -142,18 +131,17 @@ platforms apart:
 
 1. One training file per platform, built from that platform's own raw download.
 2. Drop rows whose feature values repeat, so the same sample cannot sit on both
-   sides of a split; when a repeated group disagrees about the label, the
-   majority vote decides and a tie drops the group.
+   sides of a split; a repeated group that disagrees about the label is decided
+   by majority vote, and a tie drops the group.
 3. Drop constant columns, and fill missing values with the training median
    inside the model pipeline so the medians come from the training data only.
 
-The `label` column is never used as a feature. Figure 3 shows rows and malware
-share per platform (19.7% to 82.8%).
+The `label` column is never used as a feature.
 
 The Windows table has the same trap on a smaller scale: it merges two files, one
 92% malware and one 70%. A `source` column records the file of each row (the
 model never reads it), so the table is also scored by training on one file and
-testing on the other (section 6.2).
+testing on the other.
 
 ### 4.3 Regression dataset
 
@@ -167,19 +155,19 @@ The trap here is the same shape as the platform trap above. Every snapshot of
 one process carries the same label, so a random split puts snapshots of the
 same process on both sides and the model recognises the process. The split is
 therefore grouped by `hash`: the R2 of Ridge falls from 0.980 (random) to 0.962
-(grouped), and that of HistGradientBoosting from a perfect 1.000 to 0.974
+(grouped), and that of HistGradientBoosting from a perfect 1.000 to 0.979
 (grouped 5-fold). The grouped number is the one we report.
 
 ## 5. Model selection
 
 **Spam classification.** Logistic Regression on TF-IDF features: it is fast on
 88,000 texts, gives a probability, and gives each word a weight, so the model
-can explain itself to the user. Seven settings were compared by the
-leave-one-source-out score, each trained once per held-out source:
+can explain itself to the user. Eight settings were compared:
 
 | setting | mean F1, unseen source |
 | --- | --- |
-| Logistic Regression, 20,000 words, C = 3 | **0.898** |
+| Logistic Regression, words + character n-grams | **0.912** |
+| Logistic Regression, 20,000 words, C = 3 | 0.898 |
 | Logistic Regression, 20,000 words + word pairs | 0.897 |
 | Logistic Regression, 20,000 words (C = 1, the baseline) | 0.892 |
 | Logistic Regression, 20,000 words, source words removed | 0.890 |
@@ -188,12 +176,22 @@ leave-one-source-out score, each trained once per held-out source:
 | Complement Naive Bayes, 3,000 words | 0.865 |
 
 C sets how strongly large word weights are penalised (smaller C, stronger
-penalty). We ship C = 3, which beats the baseline by 0.006; in the code a
-setting must win by 0.002 to replace the baseline. Word pairs score the same
-(0.897) but make the model several times larger. Dropping seven corpus-revealing
-words does not help on a new source (0.890). Complement Naive Bayes is clearly
-behind. The setting was picked on this score, so 0.898 is slightly optimistic;
-it was not chosen on the test split or on cross-validation.
+penalty). Word pairs score the same (0.897) but make the model several times
+larger. Dropping seven corpus-revealing words does not help on a new source
+(0.890). Complement Naive Bayes is clearly behind.
+
+The setting we ship reads the text twice: once as whole words, once as
+character n-grams of three to five characters. A word model cannot read a
+typo, a deliberate misspelling, or a word it has never seen, because it looks
+for the word as a whole. Character n-grams read the pieces instead, and that
+is where the gain comes from: the two SMS sources, which are short and full of
+slang, improve the most (F1 0.785 to 0.816 and 0.745 to 0.803). Six of the
+seven scorable sources improve, and the mean rises from 0.898 to 0.912, past
+the 0.002 margin the code demands of any challenger. The clustering below
+still uses the word view alone: a cluster is meant to describe what a message
+is about, and a piece of a word is not a topic. Mixing the two views dropped
+the clustering score from 0.748 purity to 0.659. The setting was picked on the
+leave-one-source-out score, so 0.912 is slightly optimistic.
 
 **Clustering.** K-Means on the TF-IDF vectors, reduced to 50 dimensions with
 SVD. It sees no labels. With 2 clusters, purity is 0.748 and the adjusted Rand
@@ -203,23 +201,24 @@ K-Means beat a Gaussian mixture and Ward clustering (ARI 0.08 each), and more
 clusters raised purity but not ARI (0.272 at 4, 0.210 at 8). The two clusters
 are not spam and ham: cluster 0 (42,599 messages, 26% spam) is led by `know`,
 `enron`, `message` and `wrote`, work e-mail; cluster 1 (45,199 messages, 76%
-spam) by `urltoken`, `free`, `click` and `offer`, promotion. The groups follow the
-kind of text and partly the source corpus, so K-Means is an experiment, not a
-detector.
+spam) by `urltoken`, `free`, `click` and `offer`, promotion. The groups follow
+the kind of text and partly the source corpus, so K-Means is an experiment,
+not a detector.
 
 **Malware classification.** Two models on every platform: Logistic Regression
 (linear baseline, features scaled) and HistGradientBoosting (many small
-decision trees, each fixing the errors of the last; Ke et al. 2017 describe
-the method scikit-learn follows). Gradient boosting handles values on very
-different scales and finds interactions between columns without extra work.
-The winner per platform is chosen on cross-validation, not on the test split.
+decision trees, each fixing the errors of the last; Ke et al. 2017). Gradient
+boosting handles values on very different scales and finds interactions
+between columns without extra work. The winner per platform is chosen on
+cross-validation, not on the test split.
 
 **Regression.** Ridge (linear regression with a small penalty on large weights)
 and HistGradientBoosting on the 31 process counters, predicting `nvcsw`. They
 are compared by grouped 5-fold cross-validation, which keeps all snapshots of a
 process in one fold; one grouped split holds only 20 processes, too few to
 separate them. Each is also compared with the mean-answer baseline, because an
-R2 without it says nothing about how much the counters help.
+R2 without it says nothing about how much the counters help. The tree size was
+then tuned on that same grouped score.
 
 ## 6. Implementation and evaluation
 
@@ -243,9 +242,8 @@ Pipelines (`sklearn.pipeline.Pipeline`) tie preprocessing to the model. In
 cross-validation they are refit inside every fold, so no information from the
 test fold reaches training. Fixed random seed 42. We reused scikit-learn's
 standard classes (Pedregosa et al. 2011) and wrote no custom algorithm.
-The hard part was the data, not the algorithms: merged sources with different
-formats, labels and hidden biases. One build script, one cleaning script and
-one training script made every number in this report reproducible with three
+The hard part was the data, not the algorithms. One build script, one cleaning
+script and one training script made every number reproducible with three
 commands.
 
 ### 6.2 Results
@@ -254,9 +252,9 @@ commands.
 
 | evaluation | accuracy | precision | recall | F1 |
 | --- | --- | --- | --- | --- |
-| 20% test split | 0.968 | 0.969 | 0.969 | 0.969 |
-| 5-fold cross-validation | | | | 0.968 ± 0.002 |
-| mean of unseen sources | | | | 0.898 |
+| 20% test split | 0.979 | 0.980 | 0.979 | 0.979 |
+| 5-fold cross-validation | | | | 0.979 ± 0.002 |
+| mean of unseen sources | | | | 0.912 |
 
 `email_nigerian` is not in the table: it contains only spam, so a leave-one-
 source-out run has one class and F1 is undefined.
@@ -264,18 +262,17 @@ source-out run has one class and F1 is undefined.
 F1 for each unseen source, and the precision the model would have on the class
 mix that source really has. The test sets are balanced, which flatters
 precision wherever spam is the smaller class, so the precision is worked out
-from recall, the false positive rate and the spam share each source had before
-balancing:
+from recall, the false positive rate and the spam share each source had:
 
 | source | F1 | real spam share | precision at that share |
 | --- | --- | --- | --- |
-| email_ling | 0.970 | 16% | 0.910 |
-| email_ceas | 0.964 | 47% | 0.955 |
-| email_enron | 0.951 | 49% | 0.986 |
-| email_phishing | 0.941 | 53% | 0.984 |
-| email_spamassassin | 0.928 | 28% | 0.845 |
-| sms_master | 0.785 | 9% | 0.377 |
-| sms_smishing_kaggle | 0.745 | 40% | 0.570 |
+| email_ling | 0.984 | 16% | 0.895 |
+| email_ceas | 0.967 | 47% | 0.961 |
+| email_enron | 0.970 | 49% | 0.981 |
+| email_phishing | 0.956 | 53% | 0.944 |
+| email_spamassassin | 0.891 | 28% | 0.869 |
+| sms_master | 0.816 | 9% | 0.572 |
+| sms_smishing_kaggle | 0.803 | 40% | 0.663 |
 
 **Malware**, 5-fold cross-validation F1 (test-split values are in
 `malware_results.json`):
@@ -302,10 +299,10 @@ scored on the other, it falls:
 
 | model | grouped 5-fold R2 | grouped 5-fold MAE | R2 without `utime` | R2, random split |
 | --- | --- | --- | --- | --- |
-| HistGradientBoosting (chosen) | **0.974** ± 0.014 | **815** | 0.940 | 1.000 |
+| HistGradientBoosting (chosen) | **0.979** ± 0.013 | **742** | 0.946 | 1.000 |
 | Ridge | 0.963 ± 0.026 | 1,058 | 0.933 | 0.980 |
 
-The target varies by about 47,000 across snapshots, so an MAE of 815 is a real
+The target varies by about 47,000 across snapshots, so an MAE of 742 is a real
 gain next to the 6,390 of a model that always answers the average. That
 baseline scores R2 **-0.444** on the grouped split, because the held-out
 processes differ from the training ones. The random split shows the leak we
@@ -318,43 +315,42 @@ says little about whether a process is malware.
 
 - The goal (F1 above 0.90 on unseen data) is met for the email sources and,
   by cross-validation, for the Windows, Drebin and permissions platforms. It is
-  **not met for SMS** (0.745 and 0.785) or TUANDROMD (0.886 in
+  **not met for SMS** (0.816 and 0.803) or TUANDROMD (0.886 in
   cross-validation, 0.76 on its test split). SMS messages are short and use
-  slang, and are the smallest part of the training set.
+  slang, and are the smallest part of the training data.
 - Precision on real traffic is lower than the balanced tests suggest. For
-  ordinary SMS, where 9% of messages are spam, it is about 0.38: most messages
-  flagged as spam would be ham.
-- The unseen-source number (0.898) is lower than cross-validation (0.968). The
+  ordinary SMS, where 9% of messages are spam, it is about 0.57: most messages
+  flagged as spam would still be ham, but fewer of them than before the
+  character n-grams were added (0.38).
+- The unseen-source number (0.912) is lower than cross-validation (0.979). The
   gap is the honest cost of a new source, and what a user should expect.
-- Source bias remains: `enron`, `wrote`, `vince`, `opensuse` and `louise` are among
-  the strongest ham words. Dropping them moved the score from 0.892 to 0.890,
-  so we left them in. More diverse ham data is the better fix.
+- Source bias remains: `enron`, `wrote` and `vince` are among the strongest
+  ham words. Dropping them did not help on a new source, so we left them in.
+  More diverse ham data is the better fix.
 - The Windows score of 0.992 falls to 0.75 to 0.89 on the file the model did not
   train on, so it holds only for files that look like the training files.
 - The malware models cannot judge a file from another platform; the user must
   say which platform a sample is from.
 - TUANDROMD has only 660 rows, so its score is less certain (cross-validation
   standard deviation 0.046 against 0.001 to 0.008 elsewhere).
-- Testing on held-out sources, platforms and processes found all four problems;
-  the ordinary scores hid them.
+- Testing on held-out sources, platforms and processes found all four problems
+  that the ordinary scores hid.
 
 ## 7. Conclusion
 
-We built a spam classifier (F1 0.968 cross-validated, 0.898 on unseen sources),
+We built a spam classifier (F1 0.979 cross-validated, 0.912 on unseen sources),
 four platform-specific malware classifiers (F1 0.886 to 0.992), a clustering
-experiment (purity 0.748, ARI 0.245) and a regression model (R2 0.974), behind
+experiment (purity 0.748, ARI 0.245) and a regression model (R2 0.979), behind
 a web service for all of them. The main lesson is that the first high score was
 not trustworthy: every model looked excellent until tested on data from a
 source, platform or process it had not seen. Fixing the **dataset** (balancing,
-removing clues, splitting by platform and by process, and choosing the split
-that matches how the model will be used) improved honest performance more than
-changing the algorithm. The second lesson is that a measurement, not a
-hunch, should decide each change.
+removing clues, splitting by platform and by process) improved honest
+performance more than changing the algorithm. The second lesson is that a
+measurement, not a hunch, should decide each change.
 
 **Future work.** More SMS data from different countries and years. A
 multilingual model (the data is English only). A way to guess the platform of
-an uploaded file automatically. Predict the next counter value from a sequence
-of snapshots instead of from a single one.
+an uploaded file automatically.
 
 ## Bibliography (Harvard style; check each entry and add the ones you really cite)
 

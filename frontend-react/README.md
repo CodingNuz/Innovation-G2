@@ -60,6 +60,7 @@ npm run preview  # serve the built files, with the same API proxy
 | `src/api/client.js` | every call to the back end, with the error handling in one place |
 | `src/charts/setup.js` | the Chart.js registration the charts share |
 | `src/components/` | the gauge, the alert box and the number field |
+| `src/components/UploadScan.jsx` | the file picker that scans a `.exe` or an `.apk` |
 
 The forms are built from what the back end reports about the model:
 `/api/malware/schema` and `/api/process/schema` give the kind, the range and
@@ -86,6 +87,7 @@ this app uses:
 | GET | `/api/malware/features` | the columns a platform accepts |
 | GET | `/api/malware/schema` | the kind, range and median of every column |
 | POST | `/api/malware` | classify a file |
+| POST | `/api/malware/upload` | scan a Windows `.exe`/`.dll` or an Android `.apk` |
 | GET | `/api/process/features` | the counters the regression model reads |
 | GET | `/api/process/schema` | the kind, range and median of every counter |
 | POST | `/api/process` | predict the context switches of a process |

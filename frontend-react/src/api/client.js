@@ -82,6 +82,13 @@ export function apiPost(path, body) {
   })
 }
 
+/** POST a file as multipart form data (the browser sets the boundary header). */
+export function apiUpload(path, file) {
+  const form = new FormData()
+  form.append('file', file)
+  return request(path, { method: 'POST', body: form, headers: {} })
+}
+
 // The endpoints the app uses, one function each.
 export const api = {
   health: () => apiGet('/api/health'),
@@ -94,6 +101,7 @@ export const api = {
     apiGet(`/api/malware/schema?platform=${encodeURIComponent(platform)}`),
   malware: (platform, features) =>
     apiPost('/api/malware', { platform, features }),
+  malwareUpload: (file) => apiUpload('/api/malware/upload', file),
   processFeatures: () => apiGet('/api/process/features'),
   processSchema: () => apiGet('/api/process/schema'),
   process: (features) => apiPost('/api/process', { features }),
