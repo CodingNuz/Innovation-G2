@@ -146,6 +146,12 @@ export default function SpamView() {
             id="spam-input"
             value={text}
             onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                event.currentTarget.form?.requestSubmit()
+              }
+            }}
             placeholder="Insert your email or text message in here..."
             maxLength={20000}
           />
