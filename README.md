@@ -92,6 +92,41 @@ hand-written page in `frontend/` when it does not.
 <http://127.0.0.1:3000/docs> is the generated Swagger page, where every
 endpoint can be called from the browser.
 
+### 6. The assistant tab
+
+The **Assistant** tab is a chat box over the three models. It does not answer
+from the language model's memory: the model calls the same prediction code as
+the other tabs and explains the result it gets back. Each answer can be
+expanded to show the tool call and its raw output.
+
+The chat talks to an OpenAI-compatible server. The defaults in
+`agent.config()` point at the MLX server on the LAN:
+
+| setting | default |
+| --- | --- |
+| `LLM_BASE_URL` | `http://100.107.98.17:8000/v1` |
+| `LLM_MODEL` | `orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit` |
+| `LLM_API_KEY` | the `sk-omlx-...` key for that server |
+
+With that server running, `cd innovation-g2 && python main.py` needs no
+variables. Override any of the three to point elsewhere; any
+OpenAI-compatible server works, including a local one.
+`GET /api/agent/info` reports whether the server is reachable and whether
+the configured model is one it serves.
+
+The chat box also takes one attached file: a PDF, a Windows PE (.exe/.dll), an
+Android APK, or a plain text/email/HTML message, up to 10 MB. Attach it with
+the paperclip or by dropping it on the panel, then ask a question or leave the
+box empty to get "Analyse the attached file". The assistant gets three extra
+tools for that turn (`get_attachment`, `read_attachment_text`,
+`scan_attachment`) and the reply still carries the tool log.
+
+The file is held in memory only. Nothing is written to disk and nothing is
+executed: a PDF is read with PyMuPDF (text, links, embedded files, active
+content), and a PE or APK goes through the same parser the Malware tab uses.
+A PDF or text file is scored by the spam model on its extracted text; a PE or
+APK is scored by the malware models. An unsupported file is refused with 415.
+
 ### The tests
 
 ```bash

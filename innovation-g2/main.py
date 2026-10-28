@@ -7,48 +7,70 @@ Routes:
     POST /api/malware                {"platform", "features"} -> verdict
     POST /api/malware/upload         multipart file (+ optional platform) -> verdict
     POST /api/process                {"features"} -> predicted context switches
+    POST /api/chat                   {"prompt", "history", "attachment"} -> answer
+    POST /api/chat/stream            same body -> server-sent events, one per step
+    GET  /api/agent/info             -> model server, model name, tool names
     GET  /api/model                  -> what is inside the saved bundle
     GET  /api/health                 -> readiness, for a load balancer
     GET  /docs                       -> generated API documentation
     GET  /                           -> the front-end page
 
+The chat route talks to the fine-tuned LLM on a remote OpenAI-compatible
+server.  Set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (see agent.config) to
+point at it; see agent.py for the tool loop.
+
+`attachment` is optional: {"filename": str, "content_b64": str}.  The bytes
+are parsed in memory (see attachments.py) and never written to disk.
+
 Run:  cd innovation-g2 && python main.py     (binds 127.0.0.1:3000)
 """
 
+import json
+import queue as queue_module
 import sys
+import threading
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+
+import base64
+import binascii
 
 import uvicorn
 import pymupdf
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# The React app in frontend-react/ is the current front end.  When it has been
-# built (npm run build) the build output is served here, so the whole app runs
-# from this one server.  frontend/ holds the older hand-written page and is
-# only used when no build output exists.
-REACT_BUILD = ROOT / "frontend-react" / "dist"
-FRONTEND = REACT_BUILD if (REACT_BUILD / "index.html").exists() else ROOT / "frontend"
+# The React app in frontend-react/ is the front end.  Build it first
+# (cd frontend-react && npm run build) so its output can be served here and
+# the whole app runs from this one server.
+FRONTEND = ROOT / "frontend-react" / "dist"
+FRONTEND_BUILT = (FRONTEND / "index.html").exists()
 
 # The prediction code lives next to the trained models.
 sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
 import predict  # noqa: E402
 import extract  # noqa: E402
+import agent  # noqa: E402
+import attachments  # noqa: E402
 
 # The largest upload accepted.  Real APKs are tens of megabytes; anything
 # bigger is refused before it is parsed.
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
+# A file attached to a chat question.  Small enough to sit in a request body
+# next to the conversation, large enough for a long PDF or a small APK.
+MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
 app = FastAPI(
     title="Spam and Malware Detection API",
     description="Wraps three models: spam classification, malware classification "
-                "per platform, and a process context-switch regression.",
-    version="2.0",
+                "per platform, a process context-switch regression, and a "
+                "tool-calling chat agent.",
+    version="2.1",
 )
 
 
@@ -69,6 +91,60 @@ class ProcessRequest(BaseModel):
         description="Counter name -> value. Missing counters use the training median.")
 
 
+class ChatTurn(BaseModel):
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str = Field(..., min_length=1)
+
+
+class ChatAttachment(BaseModel):
+    filename: str = Field(..., min_length=1,
+                          description="The name to show and to detect text types by")
+    content_b64: str = Field(..., min_length=1,
+                             description="The file's bytes, base64 encoded")
+
+
+class ChatRequest(BaseModel):
+    prompt: str = Field(
+        ...,
+        description="What to ask, e.g. 'Is this spam: Win $1000 now!'",
+        min_length=1,
+    )
+    history: List[ChatTurn] = Field(
+        default_factory=list,
+        description="Earlier turns, so a follow-up question keeps its context.",
+    )
+    attachment: Optional[ChatAttachment] = Field(
+        default=None,
+        description="One file to analyse with this question. Held in memory.",
+    )
+
+
+def decode_attachment(request: ChatRequest):
+    """Parse the attached file, or None when nothing was attached.
+
+    The bytes are decoded, size-checked and parsed here, in the request
+    thread, so both chat routes behave the same way and the parsing cost is
+    paid once.  Nothing is written to disk.
+    """
+    if request.attachment is None:
+        return None
+    try:
+        data = base64.b64decode(request.attachment.content_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "attachment is not valid base64")
+    if not data:
+        raise HTTPException(400, "attachment is empty")
+    if len(data) > MAX_CHAT_ATTACHMENT_BYTES:
+        raise HTTPException(413, "attachment is larger than %d MB"
+                            % (MAX_CHAT_ATTACHMENT_BYTES >> 20))
+    try:
+        return attachments.inspect(data, request.attachment.filename)
+    except attachments.UnsupportedFile as error:
+        raise HTTPException(415, str(error))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
 @app.get("/api/health")
 def health():
     """Is the service up, and are the models loaded?"""
@@ -79,6 +155,96 @@ def health():
 def model_card():
     """What the saved bundle contains, so a caller knows what to send."""
     return predict.model_info()
+
+
+@app.get("/api/agent/info")
+def agent_info():
+    """Which model answers /api/chat, and whether its server is reachable now."""
+    settings = agent.config()
+    return {
+        "model": settings["model"],
+        "base_url": agent.masked_base_url(settings["base_url"]),
+        "auth_configured": settings["api_key"] is not None,
+        "tools": agent.TOOL_NAMES,
+        "attachment_tools": agent.ATTACHMENT_TOOL_NAMES,
+        "attachment_max_bytes": MAX_CHAT_ATTACHMENT_BYTES,
+        "server": agent.server_status(),
+    }
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    """Ask the fine-tuned LLM, which calls the ML models as tools and explains them.
+
+    The reply names the tools that actually ran, so the caller can show the
+    verdict the explanation is based on.
+    """
+    if not request.prompt.strip():
+        raise HTTPException(400, "prompt is empty")
+    attachment = decode_attachment(request)
+    try:
+        return agent.chat(request.prompt,
+                          [turn.model_dump() for turn in request.history],
+                          attachment=attachment)
+    except agent.LLMUnavailable as error:
+        raise HTTPException(503, str(error))
+
+
+@app.post("/api/chat/stream")
+def chat_stream(request: ChatRequest):
+    """The same answer as POST /api/chat, sent as server-sent events.
+
+    A tool round costs two completions on the local model, so a reply can take
+    half a minute.  The events let a chat box say which model is being
+    consulted while it waits:
+
+        event: tool_start   data: {"tool": "check_spam", "args": {...}}
+        event: tool_end     data: {"tool": "check_spam", "result": {...}}
+        event: done         data: {"reply", "tool_calls", "rounds"}
+        event: error        data: {"detail"}
+    """
+    if not request.prompt.strip():
+        raise HTTPException(400, "prompt is empty")
+    history = [turn.model_dump() for turn in request.history]
+    attachment = decode_attachment(request)
+    attached = (None if attachment is None else
+                {"filename": attachment.filename, "kind": attachment.kind,
+                 "size": attachment.size, "sha256": attachment.sha256})
+
+    def events():
+        # agent.chat blocks on the model, so it runs in a worker thread and
+        # pushes events into a queue.  This generator drains the queue and
+        # yields each one as it happens, which is what makes the events
+        # useful: the chat box can say "check_spam is running" immediately.
+        events_queue = queue_module.Queue()
+
+        def on_event(name, payload):
+            events_queue.put((name, payload))
+
+        def work():
+            try:
+                if attached is not None:
+                    events_queue.put(("attachment", attached))
+                events_queue.put(("done", agent.chat(request.prompt, history,
+                                                     on_event=on_event,
+                                                     attachment=attachment)))
+            except agent.LLMUnavailable as error:
+                events_queue.put(("error", {"detail": str(error)}))
+            except Exception as error:  # noqa: BLE001 - the browser must see why
+                events_queue.put(("error", {"detail": "%s: %s"
+                                            % (type(error).__name__, error)}))
+
+        worker = threading.Thread(target=work, daemon=True)
+        worker.start()
+        while True:
+            name, payload = events_queue.get()
+            yield "event: %s\ndata: %s\n\n" % (name, json.dumps(payload))
+            if name in ("done", "error"):
+                return
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/spam")
@@ -216,14 +382,16 @@ def process_schema():
 
 @app.get("/")
 async def index():
-    # The React build starts at index.html; the older hand-written page starts
-    # at spamchameleon.html.
-    page = "index.html" if FRONTEND == REACT_BUILD else "spamchameleon.html"
-    return FileResponse(FRONTEND / page)
+    if not FRONTEND_BUILT:
+        raise HTTPException(503, "the front end is not built: run "
+                                "cd frontend-react && npm run build")
+    return FileResponse(FRONTEND / "index.html")
 
 
 # Mount last: StaticFiles at "/" must not shadow the "/" route above.
-app.mount("/", StaticFiles(directory=FRONTEND), name="frontend")
+# Without a build the API still starts; only the page is missing.
+if FRONTEND_BUILT:
+    app.mount("/", StaticFiles(directory=FRONTEND), name="frontend")
 
 
 if __name__ == "__main__":

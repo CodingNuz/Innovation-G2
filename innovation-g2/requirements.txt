@@ -8,8 +8,10 @@ joblib
 python-multipart
 pefile
 androguard
-# tests (python -m pytest test_api.py)
+# the /api/chat agent talks to the fine-tuned LLM on an OpenAI-compatible
+# server (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL); the model itself runs there
 httpx
+# tests (python -m pytest test_api.py)
 pytest
 PyMuPDF
 python-multipart

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import './App.css'
+import ChatView from './views/ChatView'
 import MalwareView from './views/MalwareView'
 import ProcessView from './views/ProcessView'
 import SpamView from './views/SpamView'
@@ -24,6 +25,12 @@ const TABS = [
     label: 'Process',
     icon: 'fa-solid fa-microchip',
     component: ProcessView,
+  },
+  {
+    id: 'chat',
+    label: 'Assistant',
+    icon: 'fa-solid fa-comments',
+    component: ChatView,
   },
 ]
 
