@@ -1,5 +1,5 @@
-/* The page sets its own type and colours in App.css. This file only resets
- * what the browser would otherwise add. */
+/* App.css sets the page's type and colours. This file only resets what the
+   browser would otherwise add. */
 
 :root {
   color-scheme: light;

@@ -1,20 +1,14 @@
-// A number input for one model feature.
-//
-// The range the model was trained on is shown as a hint, and an entry outside
-// it is flagged. The input is deliberately not restricted with the native
-// min and max attributes: those block the form submit, and the training
-// range is narrow (a process counter like utime only ever appears between
-// 371782 and 421913 in the training data), so almost every real value would
-// be refused and the form would silently do nothing.
+// Number input for one model feature. The training range is a hint and an entry
+// outside it is flagged; native min/max would block submit, since ranges are narrow.
 
-/** Format a number for a placeholder without dragging in a formatting library. */
+/** Format a number for a placeholder without pulling in a formatting library. */
 function formatNumber(value) {
   if (value === null || value === undefined) return 'n/a'
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toFixed(2)
 }
 
-/** Format the bounds of the training range, skipping the ones that are missing. */
+/** Format the bounds of the training range, skipping missing ones. */
 function formatRange(info) {
   const low = info.min
   const high = info.max

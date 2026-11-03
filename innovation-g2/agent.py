@@ -1,17 +1,7 @@
 """Tool-calling agent: the fine-tuned LLM on a remote OpenAI-compatible server.
 
-The model itself is not loaded here.  It runs on a server that exposes the
-OpenAI API (Unsloth's launch, vLLM, or llama-server all do), and this module is
-the client plus the tool loop:
-
-    1. send the prompt and TOOL_SPECS to /chat/completions
-    2. if the model answers with tool_calls, run each one against the ML models
-    3. send the results back, and repeat until it answers in words
-    4. return that answer with a log of which tools produced it
-
-The Qwen chat template in models/qwen35-2b-spam-lora already renders the
-<tools> block and asks for the <tool_call> format, so the server turns those
-into OpenAI tool_calls.  No prompt-side parsing is needed.
+Client plus tool loop: send the prompt and TOOL_SPECS, run any tool_calls
+against the ML models, send the results back, repeat until the model answers.
 """
 
 import json
@@ -21,33 +11,32 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
+import attachments
 import predict
 
-# The model must not loop on tools.  Four rounds is enough for "list the
-# platforms, then score with the right one" and stops a model that keeps
-# re-calling the same function.
+# Cap on tool rounds. Enough for "list the platforms, then score with the
+# right one", and it stops a model that keeps calling the same function.
 MAX_TOOL_ROUNDS = 6
 
-# How much of an attachment's text one read_attachment_text call returns.
-# A page of a PDF is a few thousand characters; this is a comfortable read.
+# Max characters one read_attachment_text call returns. A PDF page is a few
+# thousand, so this is plenty.
 ATTACHMENT_TEXT_CHUNK = 6000
 
-# A reply with more tool rounds than this is not an explanation any more.
+# Only the most recent messages of the history are sent to the model.
 MAX_HISTORY_MESSAGES = 20
 
-# The chat model, served by an OpenAI-compatible MLX server on the LAN.
-# Override any of these with LLM_BASE_URL / LLM_API_KEY / LLM_MODEL.
+# Chat model, served by an OpenAI-compatible MLX server on the LAN.
+# Override with LLM_BASE_URL / LLM_API_KEY / LLM_MODEL.
 DEFAULT_MODEL = "orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit"
 DEFAULT_BASE_URL = "http://100.107.98.17:8000/v1"
 DEFAULT_API_KEY = "sk-omlx-XtwkjfsneJr7XfiEvf0fcoMs"
 
-# A reasoning model spends tokens before the first visible word, and an
-# explanation of a tool result is a paragraph, so 800 cuts it off mid-answer.
+# Reasoning eats tokens before the first visible word, and explaining a tool
+# result takes a paragraph. 800 cut answers off mid-sentence.
 MAX_REPLY_TOKENS = 1600
 
-# --System Harness--
-# A reasoning model spends part of its budget before the first visible word,
-# and a tool round is two completions, so 120 s is too tight.
+# Reasoning burns part of the budget before any visible output, and a tool
+# round is two completions, so 120 s was too tight.
 DEFAULT_TIMEOUT = 300.0
 
 SYSTEM_PROMPT = (
@@ -70,8 +59,8 @@ SYSTEM_PROMPT = (
     "short paragraph unless the user asks for detail."
 )
 
-# Added to the prompt only when a file is attached, so a plain question does
-# not carry rules about tools that are not there.
+# Appended only when a file is attached, so plain questions don't carry
+# rules for tools that aren't there.
 ATTACHMENT_PROMPT = (
     "\nA file is attached to this turn and its contents are NOT in this "
     "prompt.  Rules for it:\n"
@@ -88,10 +77,28 @@ ATTACHMENT_PROMPT = (
     "them."
 )
 
+# A picture has no text layer: the assistant reads the text out of the image
+# and hands it to the spam model.
+IMAGE_PROMPT = (
+    "\nThe attached file is a picture, and you can see it directly.  Your job "
+    "on this turn is to turn the picture into a message and then have the "
+    "trained spam model judge it.  Rules:\n"
+    "10. Read the visible text out of the picture and write it out, keeping the "
+    "sender, subject, body, amounts and links as they appear.  Say plainly "
+    "when something is not legible instead of guessing it.\n"
+    "11. Then call scan_attachment.  That tool scores the text that was read "
+    "from the picture with the same spam model the Spam tab uses.\n"
+    "12. Report that verdict and its probability as the answer, and say which "
+    "words pushed the score.  If the tool refuses because no text could be "
+    "read, say that instead of inventing a verdict.\n"
+    "13. A picture by itself is not evidence of malware.  Judge only the text "
+    "you read out of it."
+)
+
 
 def _tool(name: str, description: str, properties: Dict[str, Any],
           required: List[str]) -> Dict[str, Any]:
-    """One OpenAI function schema.  `strict` keeps the server from inventing fields."""
+    """One OpenAI function schema. `strict` stops the server inventing fields."""
     return {
         "type": "function",
         "function": {
@@ -189,22 +196,16 @@ ATTACHMENT_TOOL_SPECS = [
     ),
 ]
 
-# The names the chat exposes, which grows by three when a file is attached.
+# Tool names the chat exposes; three more when a file is attached.
 ATTACHMENT_TOOL_NAMES = [spec["function"]["name"] for spec in ATTACHMENT_TOOL_SPECS]
 
 
 def clean_reply(text: str) -> str:
-    """Strip the reasoning block some templates leave in the content.
-
-    llama-server returns the model's reasoning in the same content field when
-    the chat template has no separate reasoning channel, so the reply arrives
-    as "<think>...</think>**Verdict: ...**".  The reasoning is not part of the
-    answer the user asked for.
-    """
+    """Strip the <think> block some templates leave in the content."""
     if not text:
         return ""
     text = re.sub(r"<think\b[^>]*>.*?</think\s*>", "", text, flags=re.S | re.I)
-    # A template that only closes the block leaves the opening tag implicit.
+    # Some templates only emit the closing tag, leaving the opening one implied.
     if "</think>" in text.lower() and "<think" not in text.lower():
         text = re.split(r"</think\s*>", text, maxsplit=1, flags=re.I)[-1]
     text = re.sub(r"</?think\b[^>]*>", "", text, flags=re.I)
@@ -212,14 +213,14 @@ def clean_reply(text: str) -> str:
 
 
 def _numbers(features: Any) -> Dict[str, float]:
-    """Coerce a feature dict to floats; a model may send ints or numeric strings."""
+    """Coerce a feature dict to floats; models sometimes send ints or numeric strings."""
     if not isinstance(features, dict):
         raise ValueError("features must be an object of column name -> number")
     return {str(k): float(v) for k, v in features.items()}
 
 
 def _read_attachment_text(attachment, args: Dict[str, Any]) -> Dict[str, Any]:
-    """One chunk of the attachment's text, with the offset for the next one."""
+    """One chunk of the attachment text, plus the offset of the next."""
     if not attachment.text:
         return {"error": "%s is a %s file; it has no text to read. Use "
                          "scan_attachment for its verdict."
@@ -247,34 +248,12 @@ def _read_attachment_text(attachment, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _scan_attachment(attachment) -> Dict[str, Any]:
-    """The verdict for the attached file.
-
-    A PE or APK was already parsed when it arrived, because the malware
-    models need the whole file; a PDF or text file is scored here, from the
-    text that was extracted.
-    """
-    if attachment.scan is not None:
-        return attachment.scan
-    if not attachment.text.strip():
-        return {"error": "this %s file has no text to score" % attachment.kind}
-    reply = predict.predict_spam(attachment.text)
-    reply["filename"] = attachment.filename
-    reply["scored_on"] = "extracted text (%d characters)" % len(attachment.text)
-    return reply
-
-
 def run_tool(name: str, args: Dict[str, Any],
              attachment=None) -> Dict[str, Any]:
-    """Run one tool call and return its JSON-safe result.
+    """Run one tool call and return a JSON-safe result.
 
-    A bad argument (unknown platform, unknown column, text with no known word)
-    comes back as {"error": ...} rather than an exception, so the model can
-    read it and correct the call on the next round.
-
-    `attachment` is the parsed file for this turn, if one was uploaded.  The
-    file tools refuse to run without it, so a model that asks for one when the
-    user attached nothing gets a message it can act on.
+    Bad arguments come back as {"error": ...} so the model can fix the call.
+    File tools need `attachment` and say so when it's missing.
     """
     try:
         if name in ATTACHMENT_TOOL_NAMES:
@@ -285,7 +264,7 @@ def run_tool(name: str, args: Dict[str, Any],
                 return attachment.summary()
             if name == "read_attachment_text":
                 return _read_attachment_text(attachment, args)
-            return _scan_attachment(attachment)
+            return attachments.scan(attachment)
 
         if name == "check_spam":
             text = args.get("text")
@@ -318,11 +297,11 @@ def run_tool(name: str, args: Dict[str, Any],
 
 
 class LLMUnavailable(RuntimeError):
-    """The model server could not be reached or refused the request."""
+    """The model server was unreachable or refused the request."""
 
 
 def config() -> Dict[str, Any]:
-    """Read the server settings from the environment, once per call."""
+    """Read the server settings from the environment on each call."""
     return {
         "base_url": os.getenv("LLM_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
         "api_key": os.getenv("LLM_API_KEY") or DEFAULT_API_KEY,
@@ -339,17 +318,17 @@ def _headers(api_key: Optional[str]) -> Dict[str, str]:
 
 
 def masked_base_url(base_url: str) -> str:
-    """The base URL without credentials, safe to show in a status endpoint."""
+    """Base URL with any credentials removed, safe for a status endpoint."""
     return re.sub(r"//[^/@]+@", "//", base_url)
 
 
 def default_client() -> httpx.Client:
-    """The real client.  Tests pass their own with a MockTransport."""
+    """The real client. Tests pass their own with a MockTransport."""
     return httpx.Client(timeout=config()["timeout"])
 
 
 def server_status(client: Optional[httpx.Client] = None) -> Dict[str, Any]:
-    """Ask the model server which models it serves; used by GET /api/agent/info."""
+    """Ask the model server which models it serves (GET /api/agent/info)."""
     settings = config()
     own_client = client is None
     client = client or httpx.Client(timeout=5.0)
@@ -373,12 +352,9 @@ def _post_chat(client: httpx.Client, settings: Dict[str, Any],
                messages: List[Dict[str, Any]],
                tools: Optional[List[Dict[str, Any]]] = None,
                max_tokens: Optional[int] = None) -> Dict[str, Any]:
-    """One completion round.  Returns the first choice (message + finish_reason).
+    """One completion round; returns the first choice.
 
-    `max_tokens` overrides the default budget for this call only.  The model's
-    reasoning is billed from the same budget as its answer, so a round that
-    reasons at length can end with neither text nor a tool call; _ask() raises
-    the budget for that round and keeps the reasoning.
+    `max_tokens` overrides the default budget for this call only.
     """
     body = {
         "model": settings["model"],
@@ -407,15 +383,15 @@ def _post_chat(client: httpx.Client, settings: Dict[str, Any],
     return choices[0]
 
 
-# A round that spends the whole budget on reasoning returns no text and no
-# tool call.  Rather than turn the reasoning off, the round is asked again
-# with a larger budget, so the model can finish thinking and still answer.
+# A round that burns its whole budget on reasoning returns no text and no
+# tool call. Reasoning stays on and the round is asked again with a bigger
+# budget, so the model can finish thinking and still answer.
 RETRY_TOKEN_MULTIPLIER = 3
 RETRY_TOKEN_CEILING = 12000
 
 
 def _is_empty(choice: Dict[str, Any]) -> bool:
-    """True when a round produced neither an answer nor a tool call."""
+    """True when a round gave neither an answer nor a tool call."""
     message = choice.get("message") or {}
     return not (message.get("content") or "").strip() and not message.get("tool_calls")
 
@@ -424,12 +400,7 @@ def _ask(client: httpx.Client, settings: Dict[str, Any],
          messages: List[Dict[str, Any]], tools: List[Dict[str, Any]],
          on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
          budget: Optional[int] = None) -> Dict[str, Any]:
-    """One round, retried with a bigger budget when reasoning ate it all.
-
-    The retry is the same conversation and the same tools; only max_tokens
-    grows.  Reasoning stays on, because it is what keeps the model from
-    inventing a verdict the tools did not return.
-    """
+    """One round, retried with a bigger max_tokens if reasoning used it all."""
     limit = budget or MAX_REPLY_TOKENS
     choice = _post_chat(client, settings, messages, tools, max_tokens=limit)
 
@@ -451,21 +422,11 @@ def chat(prompt: str,
          client: Optional[httpx.Client] = None,
          on_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
          attachment=None) -> Dict[str, Any]:
-    """Answer a prompt, running ML tools the model asks for.
+    """Answer a prompt, running the ML tools the model asks for.
 
-    `history` is earlier {"role", "content"} turns, so a follow-up question
-    keeps its context.  Returns the final reply and the tools that ran:
-
-        {"reply": str, "tool_calls": [{"tool", "args", "result"}], "rounds": int}
-
-    `on_event` is called as (name, payload) while the loop runs, so a caller
-    can show "check_spam is running" instead of a spinner for half a minute.
-    The names are "tool_start" and "tool_end".
-
-    `attachment` is a parsed attachments.Attachment, or None.  When one is
-    given, three file tools are offered and the prompt explains them.  The
-    file's bytes stay out of the transcript: the model sees the metadata and
-    whatever text it asks for, one chunk at a time.
+    Returns {"reply", "tool_calls", "rounds"}. `history` is earlier turns,
+    `on_event(name, payload)` gets "tool_start"/"tool_end", and `attachment`
+    adds three file tools (the bytes never enter the transcript).
     """
     settings = config()
     own_client = client is None
@@ -476,6 +437,8 @@ def chat(prompt: str,
     if attachment is not None:
         tools = tools + ATTACHMENT_TOOL_SPECS
         system = SYSTEM_PROMPT + ATTACHMENT_PROMPT
+        if getattr(attachment, "image", None):
+            system = system + IMAGE_PROMPT
 
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system}]
     for turn in (history or [])[-MAX_HISTORY_MESSAGES:]:
@@ -483,13 +446,20 @@ def chat(prompt: str,
         if role in ("user", "assistant") and isinstance(content, str) and content:
             messages.append({"role": role, "content": content})
 
-    # The prompt names the file so a question like "what is this?" is
-    # answerable, but the file itself is only reachable through the tools.
+    # The prompt names the file so "what is this?" can be answered, but the
+    # file itself is only reachable through the tools.
     if attachment is not None:
         prompt = ("%s\n\n[attached file: %s, %d bytes, type %s]"
                   % (prompt, attachment.filename, attachment.size,
                      attachment.kind))
-    messages.append({"role": "user", "content": prompt})
+
+    # Pictures go out as an image part so the model sees them.
+    # Everything else stays a plain string.
+    content = prompt
+    if attachment is not None and getattr(attachment, "image", None):
+        attachment.image["question"] = prompt
+        content = attachment.user_content()
+    messages.append({"role": "user", "content": content})
 
     calls: List[Dict[str, Any]] = []
     try:
@@ -504,8 +474,8 @@ def chat(prompt: str,
                         "tool_calls": calls, "rounds": round_number,
                         "finish_reason": choice.get("finish_reason")}
 
-            # The assistant turn that asked for the tools has to stay in the
-            # transcript, and every tool result must name its call id.
+            # The assistant turn that asked for the tools must stay in the
+            # transcript, and each tool result has to name its call id.
             messages.append({"role": "assistant",
                              "content": message.get("content") or "",
                              "tool_calls": requested})
@@ -528,8 +498,8 @@ def chat(prompt: str,
                                  "tool_call_id": call.get("id") or name,
                                  "content": json.dumps(result)})
 
-        # The model kept asking for tools.  Say so instead of pretending the
-        # last tool output is the answer.
+        # The model kept asking for tools. Report that; the last tool output
+        # isn't the answer.
         return {"reply": "The model did not settle on an answer within %d tool "
                          "rounds.  The tool results are below."
                          % MAX_TOOL_ROUNDS,
@@ -543,11 +513,7 @@ def chat(prompt: str,
 def _fallback_reply(calls: List[Dict[str, Any]],
                     choice: Dict[str, Any],
                     attachment=None) -> str:
-    """An answer when the model still returned no text after the retry.
-
-    The tool has already run, and its result is the useful part, so the caller
-    gets the verdict read from the tool output rather than a blank bubble.
-    """
+    """Fallback reply when the model gave no text after the retry."""
     reason = choice.get("finish_reason") or "unknown"
     scored = [call["result"] for call in calls
               if isinstance(call.get("result"), dict)

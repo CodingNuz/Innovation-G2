@@ -1,28 +1,7 @@
 """FastAPI service for the spam, malware and process models.
 
-Routes:
-    POST /api/spam                  {"text"} -> verdict, probability, words
-    GET  /api/malware/platforms      -> platform names
-    GET  /api/malware/features       -> feature columns (all, or ?platform=)
-    POST /api/malware                {"platform", "features"} -> verdict
-    POST /api/malware/upload         multipart file (+ optional platform) -> verdict
-    POST /api/process                {"features"} -> predicted context switches
-    POST /api/chat                   {"prompt", "history", "attachment"} -> answer
-    POST /api/chat/stream            same body -> server-sent events, one per step
-    GET  /api/agent/info             -> model server, model name, tool names
-    GET  /api/model                  -> what is inside the saved bundle
-    GET  /api/health                 -> readiness, for a load balancer
-    GET  /docs                       -> generated API documentation
-    GET  /                           -> the front-end page
-
-The chat route talks to the fine-tuned LLM on a remote OpenAI-compatible
-server.  Set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (see agent.config) to
-point at it; see agent.py for the tool loop.
-
-`attachment` is optional: {"filename": str, "content_b64": str}.  The bytes
-are parsed in memory (see attachments.py) and never written to disk.
-
 Run:  cd innovation-g2 && python main.py     (binds 127.0.0.1:3000)
+Chat uses the LLM at LLM_BASE_URL / LLM_API_KEY / LLM_MODEL (see agent.py).
 """
 
 import json
@@ -36,7 +15,6 @@ import base64
 import binascii
 
 import uvicorn
-import pymupdf
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,25 +22,24 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# The React app in frontend-react/ is the front end.  Build it first
-# (cd frontend-react && npm run build) so its output can be served here and
-# the whole app runs from this one server.
+# Serves the built React app from frontend-react/ (run npm run build there
+# first), so the whole thing runs from this one server.
 FRONTEND = ROOT / "frontend-react" / "dist"
 FRONTEND_BUILT = (FRONTEND / "index.html").exists()
 
-# The prediction code lives next to the trained models.
+# predict.py and friends live next to the trained models.
 sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
 import predict  # noqa: E402
 import extract  # noqa: E402
 import agent  # noqa: E402
 import attachments  # noqa: E402
 
-# The largest upload accepted.  Real APKs are tens of megabytes; anything
-# bigger is refused before it is parsed.
+# Upload cap. Real APKs run to tens of MB; anything bigger is rejected
+# before parsing.
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
-# A file attached to a chat question.  Small enough to sit in a request body
-# next to the conversation, large enough for a long PDF or a small APK.
+# Cap on a chat attachment. It has to fit in the request body next to the
+# history.
 MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 app = FastAPI(
@@ -120,12 +97,7 @@ class ChatRequest(BaseModel):
 
 
 def decode_attachment(request: ChatRequest):
-    """Parse the attached file, or None when nothing was attached.
-
-    The bytes are decoded, size-checked and parsed here, in the request
-    thread, so both chat routes behave the same way and the parsing cost is
-    paid once.  Nothing is written to disk.
-    """
+    """Parse the attached file, or return None if there isn't one."""
     if request.attachment is None:
         return None
     try:
@@ -174,11 +146,7 @@ def agent_info():
 
 @app.post("/api/chat")
 def chat(request: ChatRequest):
-    """Ask the fine-tuned LLM, which calls the ML models as tools and explains them.
-
-    The reply names the tools that actually ran, so the caller can show the
-    verdict the explanation is based on.
-    """
+    """Ask the fine-tuned LLM, which calls the ML models as tools."""
     if not request.prompt.strip():
         raise HTTPException(400, "prompt is empty")
     attachment = decode_attachment(request)
@@ -192,16 +160,9 @@ def chat(request: ChatRequest):
 
 @app.post("/api/chat/stream")
 def chat_stream(request: ChatRequest):
-    """The same answer as POST /api/chat, sent as server-sent events.
+    """Same as POST /api/chat, streamed as server-sent events.
 
-    A tool round costs two completions on the local model, so a reply can take
-    half a minute.  The events let a chat box say which model is being
-    consulted while it waits:
-
-        event: tool_start   data: {"tool": "check_spam", "args": {...}}
-        event: tool_end     data: {"tool": "check_spam", "result": {...}}
-        event: done         data: {"reply", "tool_calls", "rounds"}
-        event: error        data: {"detail"}
+    Events: tool_start, tool_end, done, error.
     """
     if not request.prompt.strip():
         raise HTTPException(400, "prompt is empty")
@@ -212,10 +173,8 @@ def chat_stream(request: ChatRequest):
                  "size": attachment.size, "sha256": attachment.sha256})
 
     def events():
-        # agent.chat blocks on the model, so it runs in a worker thread and
-        # pushes events into a queue.  This generator drains the queue and
-        # yields each one as it happens, which is what makes the events
-        # useful: the chat box can say "check_spam is running" immediately.
+        # agent.chat blocks, so it runs in a worker thread and pushes events
+        # onto a queue. This generator drains the queue as they arrive.
         events_queue = queue_module.Queue()
 
         def on_event(name, payload):
@@ -257,42 +216,50 @@ def check_spam(request: SpamRequest):
     except ValueError as error:
         raise HTTPException(400, str(error))
 
-@app.post("/api/spam/upload")
-async def check_spam_pdf(file: UploadFile = File(...)):
-   
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Upload PDF file.")
 
-    try:
-        content = await file.read()
+# One upload route for all file types; the parser picks the model.
+MAX_FILES_PER_UPLOAD = 20
 
-        if len(content) > 10 * 1024 * 1024:
-            raise HTTPException(413, "File maximum size is 10 MB.")
 
-        if not content:
-            raise HTTPException(400, "File is empty.")
+@app.post("/api/scan/upload")
+def scan_upload(files: List[UploadFile] = File(...),
+                platform: Optional[str] = Form(None)):
+    """Score one or more files; the bytes decide which model runs.
 
-        with pymupdf.open(stream=content, filetype="pdf") as pdf:
-            text = "\n".join(page.get_text() for page in pdf)
+    A bad file comes back with an `error` and the rest are still scored.
+    Pictures go through the Assistant tab instead.
+    """
+    if not files:
+        raise HTTPException(400, "no files were uploaded")
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        raise HTTPException(413, "at most %d files per upload" % MAX_FILES_PER_UPLOAD)
 
-    except HTTPException:
-        raise
-    except Exception as error:
-        print(f"PDF parsing error: {type(error).__name__}: {error}")
-        raise HTTPException(400, "Unable to read file.")
-
-    if not text.strip():
-        raise HTTPException(
-            400,
-            "No readable text."
-        )
-
-    try:
-        return predict.predict_spam(text)
-    except ValueError as error:
-        raise HTTPException(400, str(error))
-    finally:
-        await file.close()
+    reply = []
+    for file in files:
+        # Read one byte past the limit: enough to reject without buffering the rest.
+        data = file.file.read(MAX_UPLOAD_BYTES + 1)
+        name = file.filename or "unnamed"
+        if len(data) > MAX_UPLOAD_BYTES:
+            reply.append({"filename": name,
+                          "error": "larger than %d MB" % (MAX_UPLOAD_BYTES >> 20)})
+            continue
+        try:
+            attachment = attachments.inspect(data, name)
+            if attachment.kind == "image":
+                raise ValueError(
+                    "%s is a picture; attach it in the Assistant tab, which reads "
+                    "the text from it and scores that text as a message" % name)
+            if platform and attachment.scan is None:
+                raise ValueError("platform only applies to a Windows PE or an "
+                                 "Android APK, and %s is a %s file"
+                                 % (name, attachment.kind))
+            result = attachments.scan(attachment)
+            if platform:
+                result = dict(extract.scan(data, name, platform), kind="malware")
+            reply.append(result)
+        except (attachments.UnsupportedFile, ValueError) as error:
+            reply.append({"filename": name, "error": str(error)})
+    return {"files": reply}
 
 
 @app.get("/api/malware/platforms")
@@ -315,12 +282,7 @@ def malware_features(platform: Optional[str] = None):
 
 @app.get("/api/malware/schema")
 def malware_schema(platform: Optional[str] = None):
-    """What each malware feature looks like, so a form can be built.
-
-    For every feature: its kind (a binary yes/no switch or a number), the
-    smallest and largest value in the training data, and the median, which is
-    the value the model imputes when a feature is left out.
-    """
+    """Per-feature kind, min, max and median, for building a form."""
     try:
         if platform:
             return {platform: predict.malware_feature_schema(platform)}
@@ -335,26 +297,6 @@ def check_malware(request: MalwareRequest):
     """Classify one file as MALWARE or BENIGN for a named platform."""
     try:
         return predict.predict_malware(request.platform, request.features)
-    except ValueError as error:
-        raise HTTPException(400, str(error))
-
-
-@app.post("/api/malware/upload")
-def upload_malware(file: UploadFile = File(...), platform: Optional[str] = Form(None)):
-    """Scan an uploaded Windows PE (.exe, .dll) or Android APK.
-
-    The platform is worked out from the file's bytes.  The features are read
-    from the file and given to the same models as POST /api/malware.  An APK
-    is scored by the three Android models, whose majority vote is the verdict.
-    Pass `platform` only to force one model.  The file is parsed, never run.
-    """
-    data = file.file.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "file is larger than %d MB" % (MAX_UPLOAD_BYTES >> 20))
-    try:
-        return extract.scan(data, file.filename or "", platform or None)
-    except extract.UnsupportedFile as error:
-        raise HTTPException(415, str(error))
     except ValueError as error:
         raise HTTPException(400, str(error))
 
@@ -388,8 +330,8 @@ async def index():
     return FileResponse(FRONTEND / "index.html")
 
 
-# Mount last: StaticFiles at "/" must not shadow the "/" route above.
-# Without a build the API still starts; only the page is missing.
+# Mounted last so StaticFiles at "/" doesn't shadow the "/" route above.
+# No build just means no page; the API still starts.
 if FRONTEND_BUILT:
     app.mount("/", StaticFiles(directory=FRONTEND), name="frontend")
 

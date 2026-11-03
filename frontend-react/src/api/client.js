@@ -1,13 +1,8 @@
-// Calls the FastAPI backend.
-//
-// In development Vite proxies /api to the backend (see vite.config.js), so the
-// browser only ever sees one origin and no CORS setup is needed.  The same
-// relative paths work in production when the built files are served by the
-// FastAPI app itself.
+// Calls to the FastAPI backend. Vite proxies /api in dev (see vite.config.js).
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
 
-/** An API call that failed, with a message worth showing to the user. */
+/** An API call that failed, with a message fit to show the user. */
 export class ApiError extends Error {
   constructor(message, status, detail) {
     super(message)
@@ -17,12 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Turn a failed response into an ApiError.
- *
- * The backend answers with {"detail": "..."} for its own errors and with a
- * list of validation errors for a malformed body, so both shapes are handled.
- */
+/** Turn a failed response into an ApiError (handles {"detail"} and validation lists). */
 async function toError(response) {
   let detail = null
   let message = `Request failed (HTTP ${response.status})`
@@ -33,7 +23,7 @@ async function toError(response) {
     if (typeof body.detail === 'string') {
       message = body.detail
     } else if (Array.isArray(body.detail) && body.detail.length > 0) {
-      // FastAPI's validation errors: point at the first broken field.
+      // FastAPI validation errors: point at the first broken field.
       const first = body.detail[0]
       const field = Array.isArray(first.loc) ? first.loc[first.loc.length - 1] : null
       message = field ? `${field}: ${first.msg}` : first.msg
@@ -41,14 +31,14 @@ async function toError(response) {
       message = String(body.detail)
     }
   } catch {
-    // A response without a JSON body (a proxy error, a crash) keeps the
-    // generic message, which still says which status came back.
+    // No JSON body (proxy error, crash): keep the generic message, which
+    // still names the status.
   }
 
   return new ApiError(message, response.status, detail)
 }
 
-/** Fetch JSON from the API, with the same error handling everywhere. */
+/** Fetch JSON from the API; every call shares this error handling. */
 async function request(path, options = {}) {
   let response
   try {
@@ -88,10 +78,10 @@ export function apiPost(path, body) {
 }
 
 
-/** POST a PDF file to the API. */
-export async function apiUpload(path, file) {
+/** POST one or more files; the server picks the model from each file's bytes. */
+export async function apiUpload(path, files) {
   const formData = new FormData()
-  formData.append('file', file)
+  for (const file of files) formData.append('files', file)
 
   return request(path, {
     method: 'POST',
@@ -100,14 +90,7 @@ export async function apiUpload(path, file) {
   })
 }
 
-/**
- * POST a body and read the reply as server-sent events.
- *
- * The chat route answers with one `event: name` / `data: json` block per
- * step, because a tool round on the local model takes long enough that a
- * silent spinner looks broken.  `onEvent(name, payload)` is called for each
- * block as it arrives, and the promise resolves with the final `done` payload.
- */
+/** POST a body and read the reply as server-sent events; resolves with the `done` payload. */
 export async function apiStream(path, body, onEvent) {
   let response
   try {
@@ -172,12 +155,13 @@ function parseEvent(block) {
   }
 }
 
-// The endpoints the app uses, one function each.
+// Endpoints the app uses, one function each.
 export const api = {
   health: () => apiGet('/api/health'),
   model: () => apiGet('/api/model'),
   spam: (text) => apiPost('/api/spam', { text }),
-  spamUpload: (file) => apiUpload('/api/spam/upload', file),
+  scanUpload: (files, platform) =>
+    apiUpload('/api/scan/upload' + (platform ? `?platform=${platform}` : ''), files),
   malwarePlatforms: () => apiGet('/api/malware/platforms'),
   malwareFeatures: (platform) =>
     apiGet(`/api/malware/features?platform=${encodeURIComponent(platform)}`),
@@ -185,7 +169,7 @@ export const api = {
     apiGet(`/api/malware/schema?platform=${encodeURIComponent(platform)}`),
   malware: (platform, features) =>
     apiPost('/api/malware', { platform, features }),
-  malwareUpload: (file) => apiUpload('/api/malware/upload', file),
+  malwareUpload: (file) => apiUpload('/api/scan/upload', [file]).then((r) => r.files[0]),
   processFeatures: () => apiGet('/api/process/features'),
   processSchema: () => apiGet('/api/process/schema'),
   process: (features) => apiPost('/api/process', { features }),

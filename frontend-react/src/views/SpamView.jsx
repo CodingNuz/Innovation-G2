@@ -1,9 +1,4 @@
-// The spam check screen.
-//
-// It keeps the shape of the original SpamChameleon page (one text box, one
-// Check button, a result panel beside it) and fills the panel with the answer
-// of POST /api/spam: the verdict, the probability behind it, and the words
-// that pushed the score up or down.
+// Spam check screen: one text box, a Check button and a result panel (POST /api/spam).
 
 import { useMemo, useState } from 'react'
 import { Bar, Doughnut } from 'react-chartjs-2'
@@ -34,9 +29,18 @@ export default function SpamView({onPrediction}) {
     setBusy(true)
     setError(null)
     try {
-      const reply = file
-        ? await api.spamUpload(file)
-        : await api.spam(trimmed)
+      let reply
+      if (!file) {
+        reply = await api.spam(trimmed)
+      } else {
+        reply = (await api.scanUpload([file])).files[0]
+        if (reply.error) throw new Error(reply.error)
+        if (reply.kind !== 'spam') {
+          throw new Error(
+            `${file.name} is a ${reply.file_type === 'pe' ? 'Windows PE' : 'Android APK'} file; check it in the Malware tab.`,
+          )
+        }
+      }
       setResult(reply)
       // Record the successful prediction in the shared history.
       onPrediction?.({
@@ -54,8 +58,8 @@ export default function SpamView({onPrediction}) {
     }
   }
 
-  // The words of this message with their push, split by the direction they
-  // pushed the score. The backend already sorts them by absolute size.
+  // This message's words with their push, split by direction. The backend
+  // already sorts them by absolute size.
   const chartData = useMemo(() => {
     if (!result) return null
     const rows = [
@@ -106,7 +110,7 @@ export default function SpamView({onPrediction}) {
   const isSpam = result?.verdict === 'SPAM'
   const gaugeColor = isSpam ? palette.spam : palette.ham
 
-  // How the words of this message split between the two directions.
+  // How this message's words split between the two directions.
   const splitData = useMemo(() => {
     if (!result) return null
     const up = result.suspicious_words.length

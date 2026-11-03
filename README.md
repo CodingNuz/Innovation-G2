@@ -115,17 +115,30 @@ OpenAI-compatible server works, including a local one.
 the configured model is one it serves.
 
 The chat box also takes one attached file: a PDF, a Windows PE (.exe/.dll), an
-Android APK, or a plain text/email/HTML message, up to 10 MB. Attach it with
-the paperclip or by dropping it on the panel, then ask a question or leave the
-box empty to get "Analyse the attached file". The assistant gets three extra
-tools for that turn (`get_attachment`, `read_attachment_text`,
-`scan_attachment`) and the reply still carries the tool log.
+Android APK, a picture (PNG, JPEG, GIF or BMP), or a plain text/email/HTML
+message, up to 10 MB. Attach it with the paperclip or by dropping it on the
+panel, then ask a question or leave the box empty to get "Analyse the attached
+file". The assistant gets three extra tools for that turn
+(`get_attachment`, `read_attachment_text`, `scan_attachment`) and the
+reply still carries the tool log.
 
 The file is held in memory only. Nothing is written to disk and nothing is
 executed: a PDF is read with PyMuPDF (text, links, embedded files, active
 content), and a PE or APK goes through the same parser the Malware tab uses.
 A PDF or text file is scored by the spam model on its extracted text; a PE or
 APK is scored by the malware models. An unsupported file is refused with 415.
+
+Pictures are accepted in the Assistant tab only. Reading a screenshot is a job
+the assistant does before any model can judge it: the vision model looks at
+the image and writes out the visible text, and that text is then handed to the
+same spam model the Spam tab uses. A screenshot of a phishing email therefore
+gets the same verdict as the email pasted in as text, and the two paths cannot
+drift apart. Local OCR (`tesseract`, read from stdin, so still nothing on
+disk) runs on the same bytes as a second reader; if neither finds any text the
+assistant says so instead of inventing a verdict. Large images are halved until
+they fit 1600 px on the long side, which keeps the request small.
+
+`POST /api/scan/upload` refuses a picture and points at the Assistant tab.
 
 ### The tests
 

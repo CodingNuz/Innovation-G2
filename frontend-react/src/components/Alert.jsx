@@ -1,8 +1,4 @@
-// A message strip that shows an API error or a hint.
-//
-// The backend rejects a request for a reason (empty text, an unknown platform,
-// a feature the model has never seen), and that reason is the useful part of
-// the answer, so it is shown as it came back.
+// Message strip for an API error or a hint; the backend's reason is shown as it came back.
 
 export default function Alert({ kind = 'error', children, onDismiss }) {
   if (!children) return null

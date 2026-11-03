@@ -1,8 +1,4 @@
-// The app shell: the header, the tabs and the about box.
-//
-// The layout follows the original SpamChameleon page (header, a centred
-// working area, a footer) and adds a tab bar, because the app now covers
-// three models instead of one.
+// App shell: header, tabs and the about box.
 
 import { useEffect, useState } from 'react'
 import './App.css'
@@ -41,7 +37,7 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [health, setHealth] = useState(null)
 
-// Shared prediction history for the current session.
+  // Shared prediction history for the current session.
   const [predictionHistory, setPredictionHistory] = useState([])
 
   // Add a successful prediction to the shared history.
@@ -58,8 +54,8 @@ export default function App() {
 
   const clearHistory = () => setPredictionHistory([])
 
-  // Ask the backend once whether it is up and the models are loaded, so the
-  // user can see a broken connection instead of a mystery error later.
+  // Ask the backend once if it's up and the models are loaded, so a broken
+  // connection shows up here and not as a mystery error later.
   useEffect(() => {
     let cancelled = false
     api

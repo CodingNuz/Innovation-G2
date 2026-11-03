@@ -1,13 +1,5 @@
-// The process regression screen.
-//
-// The model predicts how many voluntary context switches a process makes. The
-// user fills in the counters of a running process and POST /api/process
-// answers with the predicted count.
-//
-// The answer is a count, not a label, so there is no probability to show as a
-// gauge. What there is is a position on the training range, which is what the
-// gauge shows here: where the predicted count sits between the smallest and
-// the largest value in the training data.
+// Process regression screen: fill in counters, POST /api/process returns a predicted
+// count. The gauge shows where it sits in the training range.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Bar } from 'react-chartjs-2'
@@ -17,8 +9,8 @@ import NumberField from '../components/NumberField'
 import { api } from '../api/client'
 import { axisOptions, baseOptions, palette } from '../charts/setup'
 
-// The counters a person can read off a process, grouped the way they describe
-// it. The rest of the model inputs are filled with the training median.
+// Counters a person can read off a process, grouped by what they describe.
+// The rest of the model inputs get the training median.
 const GROUPS = [
   {
     title: 'Memory',
@@ -57,8 +49,8 @@ export default function ProcessView({ onPrediction }) {
     }
   }, [])
 
-  // The counters that actually carry information. A counter that never changes
-  // in the training data tells the model nothing, so it is not shown.
+  // Counters that vary. One that never changes in the training data tells the
+  // model nothing, so it's hidden.
   const usable = useMemo(() => {
     if (!schema) return []
     return Object.entries(schema).filter(([, info]) => info.max > info.min)
@@ -71,7 +63,7 @@ export default function ProcessView({ onPrediction }) {
       const rows = group.features.filter((name) => byName.has(name))
       if (rows.length > 0) groups.push({ ...group, rows })
     }
-    // Anything the groups do not mention still belongs on the form.
+    // Anything the groups don't mention still belongs on the form.
     const named = new Set(GROUPS.flatMap((g) => g.features))
     const rest = usable.map(([name]) => name).filter((name) => !named.has(name))
     if (rest.length > 0) groups.push({ title: 'Other counters', rows: rest })
@@ -157,7 +149,7 @@ export default function ProcessView({ onPrediction }) {
   const chartOptions = {
     ...baseOptions,
     indexAxis: 'y',
-    // The two datasets are parts of one bar, so they stack.
+    // Both datasets are parts of one bar, so they stack.
     scales: {
       x: {
         ...axisOptions,

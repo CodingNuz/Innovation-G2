@@ -1,6 +1,6 @@
-// Chart.js setup, shared by every chart in the app.
+// Chart.js setup shared by every chart.
 //
-// Registering the pieces here keeps each chart file down to its own data.
+// Registering everything here keeps each chart file down to its own data.
 
 import {
   ArcElement,
@@ -26,16 +26,15 @@ ChartJS.register(
   LineElement,
   LinearScale,
   PointElement,
-  // The radar chart in the malware view needs the radial scale. Without it
-  // Chart.js throws "radialLinear is not a registered scale" and the whole
-  // app goes blank.
+  // The malware radar chart needs the radial scale. Without it Chart.js throws
+  // "radialLinear is not a registered scale" and the whole app goes blank.
   RadialLinearScale,
   Title,
   Tooltip,
 )
 
-// The palette, taken from the original SpamChameleon stylesheet so the React
-// version and the static page look like the same product.
+// Palette copied from the original SpamChameleon stylesheet so the React
+// version and the static page match.
 export const palette = {
   dark: '#272343',
   yellow: '#ffd803',
@@ -46,7 +45,7 @@ export const palette = {
   muted: '#8b88a8',
 }
 
-/** Shared options: no animation lag, readable fonts, gridlines kept light. */
+/** Shared options: no animation lag, readable fonts, light gridlines. */
 export const baseOptions = {
   responsive: true,
   maintainAspectRatio: false,

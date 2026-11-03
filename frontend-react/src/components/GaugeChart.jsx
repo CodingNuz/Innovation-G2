@@ -1,8 +1,4 @@
-// A semicircular gauge that shows one probability between 0 and 1.
-//
-// It is a doughnut chart with a 180 degree sweep: the first slice is the score
-// and the second fills the rest of the half circle. The number is drawn over
-// the middle of the arc with plain text, so it stays readable at every size.
+// Semicircular gauge for one probability (a half doughnut, number drawn over the arc).
 
 import { Doughnut } from 'react-chartjs-2'
 import { baseOptions, palette } from '../charts/setup'

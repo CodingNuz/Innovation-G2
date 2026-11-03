@@ -1,8 +1,4 @@
-"""Tests for the API and the prediction code behind it.
-
-Run:  cd innovation-g2 && python -m pytest test_api.py
-(needs the saved models: run combined_model.py first)
-"""
+"""API and prediction tests (run combined_model.py first, then pytest)."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,12 +10,149 @@ import io
 
 import pymupdf
 
+# pictures
+
+
+def make_png(text="WIN a FREE prize now click the link"):
+    """Small PNG with the text drawn on it, built without Pillow."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=520, height=140)
+    page.insert_text((20, 70), text, fontsize=18)
+    return page.get_pixmap().tobytes("png")
+
+
+def test_detect_kind_recognises_a_picture():
+    assert attachments.detect_kind(make_png(), "shot.png") == "image"
+    jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 40
+    assert attachments.detect_kind(jpeg, "photo.jpg") == "image"
+
+
+def test_inspect_image_builds_a_data_url_and_reads_its_text():
+    attachment = attachments.inspect(make_png(), "shot.png")
+    assert attachment.kind == "image"
+    assert attachment.image["data_url"].startswith("data:image/")
+    assert "base64," in attachment.image["data_url"]
+    # The spam model needs the visible words; OCR provides them.
+    assert "prize" in attachment.text.lower()
+    assert any("OCR found" in note for note in attachment.notes)
+
+
+def test_image_content_is_sent_as_an_image_part():
+    attachment = attachments.inspect(make_png(), "shot.png")
+    attachment.image["question"] = "what is this?"
+    content = attachment.user_content()
+    assert content[0]["type"] == "text"
+    assert content[0]["text"] == "what is this?"
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/")
+
+
+def test_a_text_attachment_has_no_image_part():
+    attachment = attachments.inspect(b"hello there", "a.txt")
+    assert attachment.user_content() is None
+
+
+def test_scan_image_scores_the_ocr_text():
+    attachment = attachments.inspect(make_png(), "shot.png")
+    reply = attachments.scan(attachment)
+    assert reply["kind"] == "spam"
+    assert reply["verdict"] == "SPAM"
+    assert "OCR" in reply["scored_on"]
+
+
+def test_a_picture_without_text_is_refused_clearly():
+    doc = pymupdf.open()
+    blank = doc.new_page(width=200, height=100).get_pixmap().tobytes("png")
+    attachment = attachments.inspect(blank, "blank.png")
+    assert attachment.text == ""
+    with pytest.raises(ValueError) as error:
+        attachments.scan(attachment)
+    assert "no readable text" in str(error.value)
+
+
+def test_large_picture_is_downscaled():
+    doc = pymupdf.open()
+    page = doc.new_page(width=4000, height=1000)
+    page.insert_text((40, 500), "wide picture", fontsize=90)
+    png = page.get_pixmap().tobytes("png")
+    attachment = attachments.inspect(png, "wide.png")
+    import base64
+    payload = attachment.image["data_url"].split("base64,", 1)[1]
+    shrunk = base64.b64decode(payload)
+    assert len(shrunk) < len(png)
+    pix = pymupdf.Pixmap(shrunk)
+    assert max(pix.width, pix.height) <= attachments.MAX_IMAGE_SIDE
+
+
+def test_chat_sends_a_picture_as_an_image_part(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json=text_reply("a screenshot of a prize email"))
+
+    attachment = attachments.inspect(make_png(), "shot.png")
+    reply = agent.chat("what is in this?", client=fake_client(handler),
+                       attachment=attachment)
+
+    user = sent[-1]["messages"][-1]
+    assert isinstance(user["content"], list)
+    assert user["content"][1]["type"] == "image_url"
+    assert "what is in this?" in user["content"][0]["text"]
+    assert reply["reply"] == "a screenshot of a prize email"
+
+
+def test_chat_offers_the_picture_rules_only_for_an_image(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json=text_reply("ok"))
+
+    agent.chat("hi", client=fake_client(handler),
+               attachment=attachments.inspect(b"hello", "a.txt"))
+    assert "you can see it directly" not in sent[-1]["messages"][0]["content"]
+
+    agent.chat("hi", client=fake_client(handler),
+               attachment=attachments.inspect(make_png(), "shot.png"))
+    assert "you can see it directly" in sent[-1]["messages"][0]["content"]
+
+
+def test_the_picture_rules_ask_for_text_then_the_spam_model(monkeypatch):
+    """Assistant's job on an image: read the text, then score it."""
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json=text_reply("ok"))
+
+    agent.chat("what is this?", client=fake_client(handler),
+               attachment=attachments.inspect(make_png(), "shot.png"))
+    system = sent[-1]["messages"][0]["content"]
+    assert "turn the picture into a message" in system
+    assert "call scan_attachment" in system
+    assert "not evidence of malware" in system
+
+
+def test_scan_upload_sends_a_picture_to_the_assistant_tab():
+    """Reading a screenshot is the Assistant's job; the scan route doesn't do it."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=520, height=140)
+    page.insert_text((20, 70), "WIN a FREE prize now click the link", fontsize=18)
+    png = page.get_pixmap().tobytes("png")
+    result = upload(png, "shot.png")
+    assert "error" in result
+    assert "Assistant tab" in result["error"]
+
 from main import app      # also puts the model folder on sys.path
 import extract
 import predict
 import attachments
 
-# --------------------------------------------------- chat attachments
+# chat attachments
 
 import base64
 import io
@@ -43,7 +176,7 @@ def pdf_with_text(text="WIN a FREE prize now, click http://evil.example/claim",
 
 
 def minimal_pe():
-    """A DOS header with the PE signature where pefile looks for it."""
+    """DOS header with the PE signature where pefile looks for it."""
     header = bytearray(0x40 + 4 + 20)
     header[0:2] = b"MZ"
     header[0x3C:0x40] = (0x40).to_bytes(4, "little")
@@ -60,7 +193,7 @@ def test_inspect_pdf_reads_text_links_and_metadata():
     summary = attachment.summary()
     assert summary["sha256"] == hashlib.sha256(attachment.data).hexdigest()
     assert summary["size"] == len(attachment.data)
-    # The bytes are described, never included.
+    # Only a description of the bytes goes in.
     assert "data" not in summary and "text" not in summary
 
 
@@ -175,7 +308,7 @@ def test_chat_offers_file_tools_only_when_a_file_is_attached(monkeypatch):
     names = [t["function"]["name"] for t in sent[-1]["tools"]]
     assert names == agent.TOOL_NAMES + agent.ATTACHMENT_TOOL_NAMES
     assert "A file is attached" in sent[-1]["messages"][0]["content"]
-    # The prompt names the file but never carries its bytes.
+    # The prompt names the file but doesn't carry its bytes.
     assert "mail.pdf" in sent[-1]["messages"][-1]["content"]
     assert "JVBERi" not in json.dumps(sent[-1])
 
@@ -314,10 +447,10 @@ def test_process_rejects_unknown_columns():
     assert post("process", {"features": {}}).status_code == 400
 
 
-# ------------------------------------------------------------ file upload
+# file upload
 
 def make_pe(timestamp=1_400_000_000, size_of_code=4096):
-    """A header-only 32-bit PE with known values (no sections, no code)."""
+    """Header-only 32-bit PE with known values (no sections, no code)."""
     import struct
     dos = b"MZ" + bytes(58) + struct.pack("<I", 0x40)
     coff = struct.pack("<HHIIIHH", 0x14C, 0, timestamp, 0, 0, 224, 0x102)
@@ -330,13 +463,21 @@ def make_pe(timestamp=1_400_000_000, size_of_code=4096):
 
 
 def upload(data, name="sample.exe", **form):
-    return client.post("/api/malware/upload", files={"file": (name, data)}, data=form)
+    reply = client.post("/api/scan/upload", files={"files": (name, data)}, data=form).json()
+    return FileReply(reply["files"][0])
+
+
+class FileReply(dict):
+    """One file's entry from /api/scan/upload, with `.json()` like a response."""
+
+    def json(self):
+        return dict(self)
 
 
 def test_pe_header_fields_are_read_into_the_models_columns():
     columns = predict.malware_feature_names("pe_windows")
     features = extract.extract_pe(make_pe(timestamp=1_400_000_000, size_of_code=777), columns)
-    assert set(features) == set(columns)           # all 50, none left for the imputer
+    assert set(features) == set(columns)           # all 50, nothing left to impute
     assert features["TimeDateStamp"] == 1_400_000_000
     assert features["SizeOfCode"] == 777
     assert features["Machine"] == 0x14C and features["Magic"] == 0x10B
@@ -354,10 +495,11 @@ def test_upload_pe_is_scored_by_the_windows_model():
 
 
 def test_upload_rejects_unsupported_empty_and_mismatched_files():
-    assert upload(b"just some text, not a program").status_code == 415
-    assert upload(b"").status_code == 400
-    assert upload(make_pe(), platform="android_drebin").status_code == 400
-    assert upload(b"MZ" + bytes(10)).status_code == 400          # PE magic, broken header
+    # Unknown binary is refused; plain text gets scored.
+    assert "unsupported" in upload(b"\x00\x01\x02\x03", "x.bin")["error"]
+    assert "empty" in upload(b"")["error"]
+    assert "does not apply" in upload(make_pe(), platform="android_drebin")["error"]
+    assert "valid PE" in upload(b"MZ" + bytes(10))["error"]       # magic, broken header
 
 
 def test_upload_rejects_a_zip_that_is_not_an_apk():
@@ -365,7 +507,7 @@ def test_upload_rejects_a_zip_that_is_not_an_apk():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("readme.txt", "hello")
-    assert upload(buffer.getvalue(), "x.zip").status_code == 415
+    assert "unsupported" in upload(buffer.getvalue(), "x.zip")["error"]
 
 
 def test_upload_rejects_an_apk_whose_manifest_cannot_be_read():
@@ -373,16 +515,11 @@ def test_upload_rejects_an_apk_whose_manifest_cannot_be_read():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("AndroidManifest.xml", b"this is not a manifest")
-    assert upload(buffer.getvalue(), "broken.apk").status_code == 400
+    assert "manifest" in upload(buffer.getvalue(), "broken.apk")["error"].lower()
 
 
 def test_upload_apk_is_scored_by_all_three_android_models():
-    """A real APK, if one is placed next to the tests, must go through the
-    whole path: manifest, dex, features, three models, one verdict.
-
-    The file is not shipped with the repository (it is 12 MB and it is not
-    the project's own data), so the test is skipped when it is not there.
-    """
+    """A real APK next to the tests goes through the whole path (skipped if absent)."""
     apk = Path(__file__).resolve().parent / "sample.apk"
     if not apk.exists():
         pytest.skip("no sample.apk next to the tests")
@@ -393,14 +530,53 @@ def test_upload_apk_is_scored_by_all_three_android_models():
     assert [r["platform"] for r in reply["results"]] == [
         "android_permissions", "android_drebin", "android_tuandromd"]
     for result in reply["results"]:
-        # Every column of every Android model is answered from the file, so
-        # the imputer has nothing to guess.
+        # Every column of every Android model comes from the file; the imputer
+        # has nothing to guess.
         assert result["features_imputed"] == 0
         assert result["features_given"] == len(predict.malware_feature_names(result["platform"]))
-    # The majority vote of the three models is the verdict.
+    # Verdict is the majority vote of the three models.
     votes = sum(1 for r in reply["results"] if r["verdict"] == "MALWARE")
     assert reply["verdict"] == ("MALWARE" if votes * 2 > 3 else "BENIGN")
     assert reply["models_voting_malware"] == votes
+
+
+def test_one_route_scores_a_pdf_and_a_pe_side_by_side():
+    """One route: the file's bytes pick the model, the caller doesn't."""
+    reply = client.post("/api/scan/upload", files=[
+        ("files", ("mail.pdf", pdf_with_text())),
+        ("files", ("app.exe", make_pe())),
+    ]).json()["files"]
+
+    assert [f["kind"] for f in reply] == ["spam", "malware"]
+    pdf, pe = reply
+    # Spam half: words behind the score, plus file facts.
+    assert pdf["verdict"] in ("SPAM", "HAM")
+    assert pdf["suspicious_words"] is not None and pdf["size"] > 0
+    assert len(pdf["sha256"]) == 64
+    # Malware half: one vote per model.
+    assert pe["file_type"] == "pe" and len(pe["results"]) == 1
+
+
+def test_one_bad_file_does_not_fail_the_others():
+    reply = client.post("/api/scan/upload", files=[
+        ("files", ("good.pdf", pdf_with_text())),
+        ("files", ("bad.bin", b"\x00\x01\x02\x03")),
+    ]).json()["files"]
+
+    assert len(reply) == 2
+    assert reply[0]["kind"] == "spam"                 # still scored
+    assert "unsupported" in reply[1]["error"]         # comes back as an error entry
+
+
+def test_the_upload_route_caps_the_batch_and_the_platform_hint():
+    too_many = [("files", ("f%d.txt" % i, b"hello")) for i in range(21)]
+    assert client.post("/api/scan/upload", files=too_many).status_code == 413
+
+    # A platform only picks a model for a PE or APK, a PDF ignores it.
+    reply = client.post("/api/scan/upload",
+                        files=[("files", ("mail.pdf", pdf_with_text()))],
+                        data={"platform": "pe_windows"}).json()["files"][0]
+    assert "does not apply" in reply["error"] or "only applies" in reply["error"]
 
 
 def test_android_tokens_match_each_datasets_column_spelling():
@@ -435,7 +611,7 @@ def test_android_tokens_match_each_datasets_column_spelling():
                            "android.permission.android.permission.READ_PHONE_STATE": 1.0}
 
 
-# ------------------------------------------------------- chat agent (offline)
+# chat agent (offline)
 
 import json
 
@@ -448,12 +624,12 @@ REAL_HTTPX_CLIENT = httpx.Client
 
 
 def fake_client(handler):
-    """An httpx.Client whose transport is a function, so no server is needed."""
+    """httpx.Client with a function as transport, so no server is needed."""
     return REAL_HTTPX_CLIENT(transport=httpx.MockTransport(handler))
 
 
 def tool_call_reply(call_id, name, arguments):
-    """A server reply where the model asks for one function call."""
+    """Server reply where the model asks for one function call."""
     return {
         "choices": [{
             "finish_reason": "tool_calls",
@@ -532,10 +708,10 @@ def test_chat_runs_the_tool_and_returns_the_explanation(monkeypatch):
         requests.append(body)
         assert request.headers["authorization"] == "Bearer sk-test"
         if len(requests) == 1:
-            # The model asks for a tool before answering.
+            # Model asks for a tool before answering.
             return httpx.Response(200, json=tool_call_reply(
                 "call_1", "check_spam", {"text": "WIN a FREE prize now"}))
-        # The tool result must come back on the next turn, under its call id.
+        # Tool result must come back next turn under its call id.
         assert body["messages"][-1] == {
             "role": "tool",
             "tool_call_id": "call_1",
@@ -552,7 +728,7 @@ def test_chat_runs_the_tool_and_returns_the_explanation(monkeypatch):
     assert len(reply["tool_calls"]) == 1
     assert reply["tool_calls"][0]["tool"] == "check_spam"
     assert reply["tool_calls"][0]["result"]["verdict"] == "SPAM"
-    # The tools are sent on every round, so the server can constrain the format.
+    # Tools go out every round so the server can constrain the format.
     assert requests[0]["tools"] and requests[0]["tool_choice"] == "auto"
     assert requests[0]["model"] == agent.config()["model"]
 
@@ -568,7 +744,7 @@ def test_chat_passes_history_and_survives_a_bad_tool_argument(monkeypatch):
             return httpx.Response(200, json=tool_call_reply(
                 "call_1", "check_malware", {"platform": "windows", "features": {}}))
         if len(rounds) == 2:
-            # The model reads the error and retries with a real platform.
+            # Model reads the error and retries with a real platform.
             result = json.loads(body["messages"][-1]["content"])
             assert "unknown platform" in result["error"]
             return httpx.Response(200, json=tool_call_reply(
@@ -655,7 +831,7 @@ def test_masked_base_url_hides_credentials():
     assert agent.masked_base_url("https://user:pw@llm.example.com/v1") == \
         "https://llm.example.com/v1"
     assert agent.masked_base_url("http://127.0.0.1:8000/v1") == "http://127.0.0.1:8000/v1"
-# --------------------------------------------------- chat streaming route
+# chat streaming route
 
 
 def test_clean_reply_drops_the_reasoning_block():
@@ -734,7 +910,7 @@ def test_chat_falls_back_when_the_model_returns_no_text(monkeypatch):
     rounds = [
         tool_call_reply("call_1", "list_malware_platforms", {}),
     ] + [
-        # The round keeps coming back empty, so the retry gives up too.
+        # Still empty on every round, so the retry gives up too.
         {"choices": [{"finish_reason": "length",
                       "message": {"role": "assistant", "content": None}}]}
     ] * 3
@@ -749,7 +925,7 @@ def test_chat_falls_back_when_the_model_returns_no_text(monkeypatch):
 
 
 def test_a_round_that_spends_its_budget_on_reasoning_is_asked_again(monkeypatch):
-    """The reasoning stays on; only the budget grows on the retry."""
+    """Reasoning stays on; only the budget grows on the retry."""
     monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     budgets = []
     rounds = [
@@ -792,7 +968,7 @@ def test_the_retry_keeps_reasoning_enabled(monkeypatch):
 
 
 def test_the_fallback_reports_the_verdict_from_the_tool(monkeypatch):
-    """An exhausted model still tells the user what the model decided."""
+    """An exhausted model still tells the user what it decided."""
     monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = [
         tool_call_reply("call_1", "check_spam", {"text": "WIN a FREE prize"}),

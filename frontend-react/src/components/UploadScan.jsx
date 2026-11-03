@@ -1,10 +1,5 @@
-// Scan a real file instead of typing its features.
-//
-// The user picks a Windows executable or an Android APK.  The backend reads
-// the file (POST /api/malware/upload), works out the platform itself, pulls
-// the features out of the headers or the manifest and answers with a verdict.
-// An APK is scored by three Android models, so each model's vote is listed
-// next to the combined verdict.
+// Scan a real file instead of typing its features (POST /api/scan/upload).
+// An APK shows each Android model's vote next to the combined verdict.
 
 import { useRef, useState } from 'react'
 import Alert from './Alert'
@@ -41,6 +36,7 @@ export default function UploadScan({ onPrediction }) {
     setError(null)
     try {
       const reply = await api.malwareUpload(file)
+      if (reply.error) throw new Error(reply.error)
       setResult(reply)
 
       // Record the successful file prediction in shared history.
@@ -62,7 +58,10 @@ export default function UploadScan({ onPrediction }) {
     }
   }
 
-  const isMalware = result?.verdict === 'MALWARE'
+  // A PDF or text file is scored by the spam model, which has no per-model
+  // votes, so the panel shows a different body for it.
+  const isSpamResult = result?.kind === 'spam'
+  const isMalware = result?.verdict === 'MALWARE' || result?.verdict === 'SPAM'
 
   return (
     <div className="uploadscan">
@@ -71,49 +70,65 @@ export default function UploadScan({ onPrediction }) {
         <input
           ref={inputRef}
           type="file"
-          accept=".exe,.dll,.sys,.apk"
+          accept=".exe,.dll,.sys,.apk,.pdf,.txt,.eml,.html,.htm"
           className="uploadinput"
           onChange={pick}
-          aria-label="Choose a Windows executable or an Android APK"
+          aria-label="Choose a file to scan"
         />
         <button type="button" className="butt checkbutt static" disabled={!file || busy} onClick={scan}>
           {busy ? 'Scanning...' : 'Scan file'}
         </button>
       </div>
       <p className="uploadhint">
-        Windows .exe / .dll or Android .apk, up to 100 MB. The file is read, never run. Or set the
-        features by hand below.
+        Windows .exe / .dll, Android .apk, a PDF or text message, up to 100 MB. The file is
+        read, never run. Or set the features by hand below.
       </p>
 
       {error ? <Alert kind="error">{error}</Alert> : null}
 
       {result ? (
         <div className="uploadresult">
-          <p className="uploadverdict" style={{ color: isMalware ? 'var(--spam-red)' : 'var(--ham-green)' }}>
+          <p
+            className="uploadverdict"
+            style={{ color: isMalware ? 'var(--spam-red)' : 'var(--ham-green)' }}
+          >
             IT IS {result.verdict} &middot; {(result.probability * 100).toFixed(1)}%
           </p>
           <p className="uploadmeta">
-            {result.filename} &middot; {result.file_type === 'pe' ? 'Windows PE' : 'Android APK'} &middot;{' '}
-            {formatSize(result.size)} &middot; sha256 {result.sha256.slice(0, 12)}...
+            {result.filename} &middot;{' '}
+            {isSpamResult
+              ? 'PDF or text'
+              : result.file_type === 'pe'
+                ? 'Windows PE'
+                : 'Android APK'}{' '}
+            &middot; {formatSize(result.size)} &middot; sha256 {result.sha256.slice(0, 12)}...
           </p>
-          <ul className="uploadmodels">
-            {result.results.map((model) => (
-              <li key={model.platform}>
-                <span>{MODEL_LABELS[model.platform] ?? model.platform}</span>
-                <span className="uploadbar" aria-hidden="true">
-                  <span
-                    style={{
-                      width: `${model.probability * 100}%`,
-                      background: model.verdict === 'MALWARE' ? 'var(--spam-red)' : 'var(--ham-green)',
-                    }}
-                  />
-                </span>
-                <span>
-                  {model.verdict} {(model.probability * 100).toFixed(1)}%
-                </span>
-              </li>
-            ))}
-          </ul>
+          {isSpamResult ? (
+            <p className="uploadhint">
+              Scored as a message on its extracted text. The words behind the score are in the Spam
+              tab.
+            </p>
+          ) : (
+            <ul className="uploadmodels">
+              {result.results.map((model) => (
+                <li key={model.platform}>
+                  <span>{MODEL_LABELS[model.platform] ?? model.platform}</span>
+                  <span className="uploadbar" aria-hidden="true">
+                    <span
+                      style={{
+                        width: `${model.probability * 100}%`,
+                        background:
+                          model.verdict === 'MALWARE' ? 'var(--spam-red)' : 'var(--ham-green)',
+                      }}
+                    />
+                  </span>
+                  <span>
+                    {model.verdict} {(model.probability * 100).toFixed(1)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           {result.file_type === 'pe' ? (
             <p className="uploadhint">
               Read from the PE headers: {result.results[0].features_given} of 50 fields. A 64-bit or

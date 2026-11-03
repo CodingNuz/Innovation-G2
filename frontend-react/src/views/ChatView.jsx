@@ -1,19 +1,12 @@
-// The assistant screen: one chat box over the three ML models.
-//
-// The answer comes from the local LLM, but every verdict in it comes from the
-// trained models: the agent calls them as tools and returns the reply with a
-// log of what ran.  The log is shown under each answer, so a claim like
-// "SPAM, 0.95" can be checked against the tool output that produced it.
-//
-// The backend answers with server-sent events (see apiStream), so the box can
-// say "running check_spam" while the model is still thinking instead of
-// showing a spinner that looks stuck.
+// Assistant screen: one chat box over the three ML models.
+// Verdicts come from the trained models via tool calls, and the tool log sits
+// under each answer. Events stream in (see apiStream).
 
 import { useEffect, useRef, useState } from 'react'
 import Alert from '../components/Alert'
 import { api } from '../api/client'
 
-// A tool name is a function identifier; a person reads "Spam check".
+// Tool names are function identifiers; people read "Spam check".
 const TOOL_LABELS = {
   check_spam: 'Spam check',
   check_malware: 'Malware check',
@@ -25,11 +18,17 @@ const TOOL_LABELS = {
   scan_attachment: 'Scan attached file',
 }
 
-// What the chat box accepts.  The backend decides the real type from the
-// bytes; this list only keeps the file picker honest.
-const ACCEPT = '.pdf,.exe,.dll,.sys,.apk,.txt,.text,.md,.log,.csv,.json,.eml,.html,.htm'
+// What the chat box accepts. The backend decides the real type from the
+// bytes; this list only filters the file picker.
+const ACCEPT =
+  '.pdf,.exe,.dll,.sys,.apk,.txt,.text,.md,.log,.csv,.json,.eml,.html,.htm,' +
+  '.png,.jpg,.jpeg,.gif,.bmp,.webp'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const DEFAULT_QUESTION = 'Analyse the attached file.'
+
+// A picture is shown in the message bubble so the conversation keeps a
+// preview of what the model saw.
+const IMAGE_EXT = /\.(png|jpe?g|gif|bmp|webp)$/i
 
 const EXAMPLES = [
   "Is this message spam? 'WIN a FREE prize now, click the link to claim your reward'",
@@ -40,23 +39,19 @@ const EXAMPLES = [
 let nextId = 1
 const newId = () => String(nextId++)
 
-/** Bytes as a size a person reads. */
+/** Bytes as a human-readable size. */
 function formatSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-// The reply is fetched whole; this only paces how it appears.  A short answer
+// The reply arrives whole; this only paces how it appears. A short answer
 // takes about a second, and a long one is capped so nobody waits on an effect.
 const TYPE_MS = 1200
 const TYPE_FRAME_MS = 16
 const TYPE_MIN_CHARS = 8
 
-/** Reveal `text` letter by letter, once, for this message.
-
- * `enabled` is the request to animate, not a lasting state: the hook turns it
- * off itself after the reveal so a later re-render cannot replay the effect.
- */
+/** Reveal `text` letter by letter, once; `enabled` is switched off after the reveal. */
 function useTypewriter(text, enabled) {
   const [shown, setShown] = useState(enabled ? '' : text)
   const [animating, setAnimating] = useState(enabled)
@@ -97,8 +92,8 @@ export default function ChatView() {
   const listRef = useRef(null)
   const fileInputRef = useRef(null)
 
-  // Which model answers, so the box can show it is connected before the first
-  // question.  A dead server is reported here rather than on the first send.
+  // Which model answers, so the box can show it's connected before the first
+  // question. A dead server shows up here, before the first send.
   useEffect(() => {
     let cancelled = false
     api
@@ -137,7 +132,7 @@ export default function ChatView() {
     chooseFile(event.dataTransfer?.files?.[0] ?? null)
   }
 
-  /** Base64, because the bytes travel inside the same JSON body. */
+  /** Base64, since the bytes travel inside the same JSON body. */
   async function encodeFile(file) {
     const bytes = new Uint8Array(await file.arrayBuffer())
     let binary = ''
@@ -155,8 +150,8 @@ export default function ChatView() {
     if ((!typed && !file) || busy) return
     const prompt = typed || DEFAULT_QUESTION
 
-    // The history sent to the server is what the user saw: their questions and
-    // the answers.  Tool logs are not replayed, they are shown only here.
+    // The history sent is what the user saw: questions and answers. Tool logs
+    // aren't replayed, only shown here.
     const history = messages
       .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.text))
       .map((m) => ({ role: m.role, content: m.text }))
@@ -165,7 +160,15 @@ export default function ChatView() {
       id: newId(),
       role: 'user',
       text: prompt,
-      file: file ? { name: file.name, size: file.size } : null,
+      file: file
+        ? {
+            name: file.name,
+            size: file.size,
+            // Object URLs let the bubble show the picture without a second copy
+            // of its bytes in state.
+            preview: IMAGE_EXT.test(file.name) ? URL.createObjectURL(file) : null,
+          }
+        : null,
     }
     setMessages((current) => [...current, question])
     setDraft('')
@@ -284,6 +287,13 @@ export default function ChatView() {
             message.role === 'user' ? (
               <div key={message.id} className="chatmsg chatmsg-user">
                 <p>{message.text}</p>
+                {message.file?.preview ? (
+                  <img
+                    className="chatimage"
+                    src={message.file.preview}
+                    alt={`Attached picture: ${message.file.name}`}
+                  />
+                ) : null}
                 {message.file ? (
                   <p className="chatfile">
                     <i className="fa-solid fa-paperclip" aria-hidden="true" />{' '}
@@ -390,7 +400,7 @@ export default function ChatView() {
 
 
 
-/** Bold and inline-code spans inside one line. */
+/** Bold and inline-code spans in one line. */
 function Inline({ text }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
   return (
@@ -466,20 +476,14 @@ function AssistantMessage({ message }) {
   )
 }
 
-/** The verdict word and the probability, from the tool result when there is one. */
+/** Verdict word and probability, from the tool result when there is one. */
 const VERDICT_WORDS = ['SPAM', 'HAM', 'MALWARE', 'BENIGN']
 
-/**
- * Drop the sentence the stamp already says.
-
- * A model almost always opens with "Verdict: SPAM, probability 0.9503", which
- * is exactly the line above it.  Only a leading sentence is removed, and only
- * when it carries no other claim, so the explanation survives intact.
- */
+/** Drop the leading sentence that repeats the verdict stamp, if it adds no other claim. */
 
 function parseReport(text, tools) {
-  // The tool output is the source of truth; the prose is what the model made
-  // of it.  A number read from the result cannot drift from the model.
+  // The tool output is the source of truth; the prose is the model's reading of
+  // it. A number taken from the result can't drift from what the model said.
   const scored = (tools || [])
     .map((call) => call.result)
     .filter((result) => result && typeof result.probability === 'number')
@@ -504,7 +508,7 @@ function parseReport(text, tools) {
   return { verdict: VERDICT_WORDS.includes(verdict) ? verdict : null, probability, words }
 }
 
-/** The headline of the answer: the word, the number, and a meter. */
+/** Headline of the answer: the word, the number and a meter. */
 function VerdictStamp({ verdict, probability }) {
   const bad = verdict === 'SPAM' || verdict === 'MALWARE'
   const percent = probability === null ? null : Math.round(probability * 1000) / 10
@@ -551,8 +555,8 @@ function Evidence({ words }) {
 
 function ChatText({ text }) {
   // The model answers in Markdown. Only bold, inline code, bullets and
-  // paragraphs are rendered: those are what it actually uses, and building
-  // React elements keeps the reply inert instead of injecting HTML.
+  // paragraphs are rendered, since that's all it uses, and building React
+  // elements means no HTML gets injected.
   const blocks = []
   let paragraph = []
   let bullets = []
@@ -611,9 +615,9 @@ function ChatText({ text }) {
 
 function stripLeadingVerdict(text, verdict) {
   if (!verdict) return text
-  // The sentence ends at a full stop followed by a space, the closing bold
-  // marker or the end of the line, so the decimal point in "0.9503" does not
-  // cut it in half.
+  // The sentence ends at a full stop followed by a space, a closing bold
+  // marker or the end of the line, so the decimal point in "0.9503" doesn't
+  // split it.
   const sentence = /^\s*\**\s*(?:verdict|result|conclusion)\s*\**\s*[:\u2014-]\s*(.*?)(?:\.(?=\s|\*|$)|\n|$)\s*/i
   const match = text.match(sentence)
   if (!match) return text
@@ -622,8 +626,8 @@ function stripLeadingVerdict(text, verdict) {
   const rest = text.slice(match[0].length).replace(/^\s*\*\*\s*/, '')
   if (!rest.trim()) return text
 
-  // Keep the sentence when it says more than the verdict and the number; a
-  // caveat like "but it is signed by Microsoft" must not be dropped.
+  // Keep the sentence if it says more than the verdict and number; a caveat
+  // like "but it is signed by Microsoft" must not be dropped.
   const FILLER = new Set([
     'verdict', 'result', 'conclusion', 'probability', 'probabilities',
     'confidence', 'score', 'model', 'prediction', 'is', 'the', 'of',

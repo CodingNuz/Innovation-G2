@@ -1,62 +1,63 @@
 """Read an attached file in memory and describe it.
 
-The chat box lets a person attach one file.  This module turns those bytes
-into the handful of facts the assistant needs: what kind of file it is, its
-hash, its text, the links it carries, and anything that looks worth a second
-look (embedded files, JavaScript, auto-actions).
-
-Nothing here touches the disk.  The bytes arrive in a request body, are parsed
-from an in-memory stream, and are released with the request.  Nothing is
-executed either: a PE and an APK are only read.
-
-    inspect(data, filename) -> Attachment
-
-The malware side reuses extract.py, so a file scanned from the chat box goes
-through exactly the same parser as the Malware tab.
+Nothing touches disk and nothing is executed. Pictures get a vision pass plus
+OCR text for the spam model. Malware scanning reuses extract.py.
 """
 
 import hashlib
 import html
 import io
 import re
+import subprocess
+import shutil
 import zipfile
 from email import message_from_bytes
 from typing import Any, Dict, List
 
 import predict
 
-# PDFs begin with this marker; the spec allows junk before it, so the marker
-# is also looked for inside the first kilobyte.
+# PDFs start with this marker, but the spec allows junk before it, so we also
+# look in the first kilobyte.
 PDF_MAGIC = b"%PDF-"
 
-# A text file that is larger than this is not a message anybody reads.
+# Bigger than this and it's not a message anyone reads.
 MAX_TEXT_CHARS = 2_000_000
 
 LINK_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
 TAG_RE = re.compile(r"<[^>]+>")
 HREF_RE = re.compile(r"href\s*=\s*[\"']([^\"']+)[\"']", re.I)
 
-# PDF catalogue keys that mean the document can act on its own.
+# PDF catalogue keys that let the document act on its own.
 PDF_SCRIPT_KEYS = ("/JavaScript", "/JS", "/OpenAction", "/AA", "/Launch",
                    "/EmbeddedFile", "/RichMedia")
 
+# Image formats by magic number. Pictures have no text layer, so the kind is
+# settled here, before anything tries to decode the bytes as text.
+IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "image/png", "png"),
+    (b"\xff\xd8\xff", "image/jpeg", "jpg"),
+    (b"GIF87a", "image/gif", "gif"),
+    (b"GIF89a", "image/gif", "gif"),
+    (b"BM", "image/bmp", "bmp"),
+)
+
+# The vision endpoint wants a data URL. Big photos get downscaled first to
+# keep the request small.
+MAX_IMAGE_SIDE = 1600
+
 
 class UnsupportedFile(ValueError):
-    """The bytes are not a file type the chat box can read."""
+    """Not a file type the chat box can read."""
 
 
 class Attachment:
-    """One attached file, already parsed, kept in memory.
-
-    `text` is the text the spam model can read; `scan` is the malware result
-    for a PE or APK.  Both may be empty: a PDF has text but no malware scan,
-    a PE has a scan but no text.
-    """
+    """One parsed attachment: `text` for the spam model, `scan` for malware."""
 
     def __init__(self, filename: str, data: bytes, kind: str,
                  text: str = "", notes: List[str] = None,
                  links: List[str] = None, pages: int = 0,
-                 scan: Dict[str, Any] = None):
+                 scan: Dict[str, Any] = None,
+                 image: Dict[str, Any] = None):
         self.filename = filename or "attachment"
         self.data = data
         self.kind = kind
@@ -65,6 +66,9 @@ class Attachment:
         self.links = list(links or [])
         self.pages = pages
         self.scan = scan
+        # Picture only: the data URL for the vision model, plus its size.
+        # None for other kinds, so callers can just test this field.
+        self.image = image
 
     @property
     def size(self) -> int:
@@ -75,7 +79,7 @@ class Attachment:
         return hashlib.sha256(self.data).hexdigest()
 
     def summary(self) -> Dict[str, Any]:
-        """What the model is told about the file: facts, never raw bytes."""
+        """What the model is told about the file: facts, no raw bytes."""
         return {
             "filename": self.filename,
             "size": self.size,
@@ -87,20 +91,28 @@ class Attachment:
             "notes": self.notes,
         }
 
+    def user_content(self):
+        """Content for this turn's user message."""
+        if not self.image:
+            return None
+        return [
+            {"type": "text", "text": self.image["question"]},
+            {"type": "image_url",
+             "image_url": {"url": self.image["data_url"]}},
+        ]
+
 
 def detect_kind(data: bytes, filename: str = "") -> str:
-    """Decide the file type from the bytes.
-
-    The name is a hint only for text, where there is no magic number: an .eml
-    is read as an email, .html as markup, anything else as plain text.  Binary
-    formats are recognised by content, so a PDF renamed to .exe is still a PDF.
-    """
+    """File type from the bytes; the name only matters for text (.eml, .html)."""
     if not data:
         raise UnsupportedFile("the file is empty")
     if data[:5] == PDF_MAGIC or PDF_MAGIC in data[:1024]:
         return "pdf"
     if data[:2] == b"MZ":
         return "pe"
+    for magic, _mime, _ext in IMAGE_MAGIC:
+        if data.startswith(magic):
+            return "image"
     if zipfile.is_zipfile(io.BytesIO(data)):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -111,7 +123,7 @@ def detect_kind(data: bytes, filename: str = "") -> str:
     if b"\x00" in data[:8192]:
         raise UnsupportedFile(
             "unsupported file: expected a PDF, a Windows PE, an Android APK, "
-            "or a text/email file")
+            "an image, or a text/email file")
     lowered = (filename or "").lower()
     if lowered.endswith(".eml"):
         return "email"
@@ -121,7 +133,7 @@ def detect_kind(data: bytes, filename: str = "") -> str:
 
 
 def _decode(data: bytes) -> str:
-    """Text in the encoding a message is actually sent in."""
+    """Text decoded with the encoding the message was sent in."""
     for encoding in ("utf-8", "utf-16", "latin-1"):
         try:
             return data.decode(encoding)
@@ -131,7 +143,7 @@ def _decode(data: bytes) -> str:
 
 
 def _unique(values) -> List[str]:
-    """Keep the first spelling of each value, in order."""
+    """Drop repeats, keep the first occurrence of each value."""
     seen = set()
     out = []
     for value in values:
@@ -142,14 +154,14 @@ def _unique(values) -> List[str]:
     return out
 
 def inspect_pdf(data: bytes, filename: str) -> Attachment:
-    """Text, links, embedded files and active content of a PDF."""
+    """Text, links, embedded files and active content from a PDF."""
     import pymupdf
 
     notes: List[str] = []
     links: List[str] = []
     try:
         document = pymupdf.open(stream=data, filetype="pdf")
-    except Exception as error:            # pymupdf raises its own error types
+    except Exception as error:            # pymupdf has its own error types
         raise ValueError("cannot read this PDF: %s" % error)
 
     try:
@@ -183,8 +195,8 @@ def inspect_pdf(data: bytes, filename: str) -> Attachment:
             notes.append("%d embedded file(s) inside the PDF: %s"
                          % (embedded, ", ".join(names[:10])))
 
-        # The catalogue holds the document-level switches (open actions,
-        # scripts); page annotations can carry their own actions.
+        # Document-level switches (open actions, scripts) live in the catalogue;
+        # annotations on a page can have their own.
         raw = ""
         if document.xref_length() > 1:
             try:
@@ -204,7 +216,7 @@ def inspect_pdf(data: bytes, filename: str) -> Attachment:
 
 
 def _html_to_text(markup: str) -> str:
-    """Readable text from markup, with block tags as line breaks."""
+    """Readable text from markup; block tags become line breaks."""
     markup = re.sub(r"(?is)<(script|style)\b.*?</\1\s*>", " ", markup)
     markup = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</tr>|</li>", "\n", markup)
     text = html.unescape(TAG_RE.sub(" ", markup))
@@ -213,7 +225,7 @@ def _html_to_text(markup: str) -> str:
 
 
 def inspect_email(data: bytes, filename: str) -> Attachment:
-    """Subject, sender and body of an .eml, with its links."""
+    """Subject, sender, body and links of an .eml."""
     message = message_from_bytes(data)
     body_parts = []
     for part in message.walk():
@@ -253,7 +265,7 @@ def inspect_email(data: bytes, filename: str) -> Attachment:
 
 
 def inspect_html(data: bytes, filename: str) -> Attachment:
-    """The visible text of an HTML message, plus its links."""
+    """Visible text and links of an HTML message."""
     markup = _decode(data)
     text = _html_to_text(markup)[:MAX_TEXT_CHARS]
     hrefs = [href for href in HREF_RE.findall(markup)
@@ -266,18 +278,14 @@ def inspect_html(data: bytes, filename: str) -> Attachment:
 
 
 def inspect_text(data: bytes, filename: str) -> Attachment:
-    """A plain text message; links are pulled out for the notes."""
+    """Plain text message; links go into the notes."""
     text = _decode(data)[:MAX_TEXT_CHARS]
     return Attachment(filename, data, "text", text=text,
                       links=_unique(LINK_RE.findall(text)))
 
 
 def inspect_binary(data: bytes, kind: str, filename: str) -> Attachment:
-    """Scan a PE or APK with the same parser the Malware tab uses.
-
-    The scan is done once, here, because it needs the whole file anyway; the
-    model then asks for the result instead of re-reading the bytes.
-    """
+    """Scan a PE or APK with the same parser as the Malware tab."""
     import extract
 
     scan = extract.scan(data, filename)
@@ -291,15 +299,115 @@ def inspect_binary(data: bytes, kind: str, filename: str) -> Attachment:
     return Attachment(filename, data, kind, notes=notes, scan=scan)
 
 
+def _image_mime(data: bytes) -> str:
+    """MIME type of a picture, from its magic number."""
+    for magic, mime, _ext in IMAGE_MAGIC:
+        if data.startswith(magic):
+            return mime
+    return "application/octet-stream"
+
+
+def _shrink_image(data: bytes) -> bytes:
+    """Halve a large picture until it fits; phone photos cost too many tokens."""
+    import pymupdf
+
+    try:
+        pix = pymupdf.Pixmap(data)
+    except Exception:
+        return data
+    if max(pix.width, pix.height) <= MAX_IMAGE_SIDE:
+        return data
+
+    while max(pix.width, pix.height) > MAX_IMAGE_SIDE and pix.width > 1:
+        pix.shrink(1)
+    try:
+        return pix.tobytes("png")
+    except Exception:
+        return data
+
+
+def ocr_text(data: bytes) -> str:
+    """OCR a picture with the local tesseract; returns "" if it isn't installed."""
+    if not shutil.which("tesseract"):
+        return ""
+    try:
+        done = subprocess.run(["tesseract", "stdin", "stdout"],
+                              input=data, capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if done.returncode != 0:
+        return ""
+    text = done.stdout.decode("utf-8", "replace").strip()
+    return text[:MAX_TEXT_CHARS]
+
+
+def inspect_image(data: bytes, filename: str) -> Attachment:
+    """Picture attachment. The sha256 covers the original bytes, not the downscaled ones."""
+    import base64
+
+    prepared = _shrink_image(data)
+    mime = _image_mime(prepared) if prepared is not data else _image_mime(data)
+    if prepared is not data:
+        mime = "image/png"
+    text = ocr_text(prepared)
+
+    notes = ["a picture, read by the vision model"]
+    if text:
+        notes.append("OCR found %d characters of text" % len(text))
+    else:
+        notes.append("no readable text was found by OCR")
+
+    image = {
+        "data_url": "data:%s;base64,%s" % (mime, base64.b64encode(prepared).decode()),
+        "question": "",
+    }
+    attachment = Attachment(filename, data, "image", text=text, notes=notes,
+                            image=image)
+    # The model gets the file name. The caller fills in the question, since it
+    # knows what the user asked.
+    image["question"] = "Look at the attached picture."
+    return attachment
+
+
 def inspect(data: bytes, filename: str = "") -> Attachment:
-    """Parse one attachment.  Raises UnsupportedFile or ValueError."""
+    """Parse one attachment. Raises UnsupportedFile or ValueError."""
     kind = detect_kind(data, filename)
     if kind == "pdf":
         return inspect_pdf(data, filename)
     if kind in ("pe", "apk"):
         return inspect_binary(data, kind, filename)
+    if kind == "image":
+        return inspect_image(data, filename)
     if kind == "email":
         return inspect_email(data, filename)
     if kind == "html":
         return inspect_html(data, filename)
     return inspect_text(data, filename)
+
+
+def scan(attachment: Attachment) -> Dict[str, Any]:
+    """Score the attachment with the model that fits its type.
+
+    `kind` is "malware" (per-model `results`) or "spam" (words behind the score).
+    """
+    if attachment.scan is not None:
+        return {**attachment.scan, "kind": "malware"}
+    if not attachment.text.strip():
+        if attachment.kind == "image":
+            raise ValueError("%s is a picture with no readable text, so there "
+                             "is nothing for the spam model to score"
+                             % attachment.filename)
+        raise ValueError("%s %s has no text to score"
+                         % (attachment.kind, attachment.filename))
+    reply = predict.predict_spam(attachment.text)
+    # predict_spam answers about a message, not a file, so the file facts
+    # for display are added here.
+    reply["filename"] = attachment.filename
+    reply["size"] = attachment.size
+    reply["sha256"] = attachment.sha256
+    reply["kind"] = "spam"
+    if attachment.kind == "image":
+        # Say where the text came from, so a verdict on a photo isn't read as
+        # a verdict on the picture.
+        reply["scored_on"] = "text read from the picture by OCR"
+    return reply
