@@ -14,7 +14,7 @@ import { api } from './api/client'
 import HistoryView from './views/HistoryView'
 
 const TABS = [
-  { id: 'spam', label: 'Spam or HAM', icon: 'fa-solid fa-envelope', component: SpamView },
+  { id: 'spam', label: 'Spam', icon: 'fa-solid fa-envelope', component: SpamView },
   {
     id: 'malware',
     label: 'Malware',
