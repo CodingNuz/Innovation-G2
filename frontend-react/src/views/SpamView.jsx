@@ -17,7 +17,7 @@ const EXAMPLES = {
   ham: 'Are we still meeting for lunch tomorrow at the office?',
 }
 
-export default function SpamView() {
+export default function SpamView({onPrediction}) {
   const [text, setText] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -38,6 +38,14 @@ export default function SpamView() {
         ? await api.spamUpload(file)
         : await api.spam(trimmed)
       setResult(reply)
+      // Record the successful prediction in the shared history.
+      onPrediction?.({
+        model: 'spam',
+        verdict: reply.verdict,
+        probability: reply.probability,
+        inputType: file ? 'PDF' : 'Text',
+        inputSummary: file ? file.name : trimmed.slice(0, 120),
+      })
     } catch (apiError) {
       setResult(null)
       setError(apiError.message)

@@ -22,7 +22,7 @@ function formatSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-export default function UploadScan() {
+export default function UploadScan({ onPrediction }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -40,12 +40,25 @@ export default function UploadScan() {
     setBusy(true)
     setError(null)
     try {
-      setResult(await api.malwareUpload(file))
+      const reply = await api.malwareUpload(file)
+      setResult(reply)
+
+      // Record the successful file prediction in shared history.
+      onPrediction?.({
+        model: 'malware',
+        verdict: reply.verdict,
+        probability: reply.probability,
+        platform: reply.file_type === 'pe' ? 'Windows' : 'Android',
+        inputType: 'File upload',
+        inputSummary: `${reply.filename} (${reply.file_type === 'pe' ? 'Windows PE' : 'Android APK'}, ${formatSize(reply.size)})`,
+        sha256: reply.sha256,
+        modelCount: reply.results?.length ?? 0,
+      })
     } catch (apiError) {
       setResult(null)
       setError(apiError.message)
     } finally {
-      setBusy(false)
+    setBusy(false)
     }
   }
 

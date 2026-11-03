@@ -11,6 +11,7 @@ import MalwareView from './views/MalwareView'
 import ProcessView from './views/ProcessView'
 import SpamView from './views/SpamView'
 import { api } from './api/client'
+import HistoryView from './views/HistoryView'
 
 const TABS = [
   { id: 'spam', label: 'Spam or HAM', icon: 'fa-solid fa-envelope', component: SpamView },
@@ -32,12 +33,30 @@ const TABS = [
     icon: 'fa-solid fa-comments',
     component: ChatView,
   },
+  { id: 'history', label: 'History', icon: 'fa-solid fa-clock-rotate-left', component: HistoryView },
 ]
 
 export default function App() {
   const [tab, setTab] = useState('spam')
   const [aboutOpen, setAboutOpen] = useState(false)
   const [health, setHealth] = useState(null)
+
+// Shared prediction history for the current session.
+  const [predictionHistory, setPredictionHistory] = useState([])
+
+  // Add a successful prediction to the shared history.
+  const recordPrediction = (prediction) => {
+    setPredictionHistory((current) => [
+      ...current,
+      {
+        ...prediction,
+        id: `${Date.now()}-${current.length}`,
+        createdAt: new Date().toISOString(),
+      },
+    ])
+  }
+
+  const clearHistory = () => setPredictionHistory([])
 
   // Ask the backend once whether it is up and the models are loaded, so the
   // user can see a broken connection instead of a mystery error later.
@@ -106,7 +125,14 @@ export default function App() {
       </nav>
 
       <main className="main" id="top">
-        <Active />
+        {tab === 'history' ? (
+          <HistoryView
+            history={predictionHistory}
+            onClearHistory={clearHistory}
+          />
+        ) : (
+          <Active onPrediction={recordPrediction} />
+        )}
       </main>
 
       <footer className="footer">

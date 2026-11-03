@@ -38,7 +38,7 @@ const GROUPS = [
   },
 ]
 
-export default function ProcessView() {
+export default function ProcessView({ onPrediction }) {
   const [schema, setSchema] = useState(null)
   const [values, setValues] = useState({})
   const [result, setResult] = useState(null)
@@ -101,6 +101,19 @@ export default function ProcessView() {
     try {
       const reply = await api.process(values)
       setResult(reply)
+
+      // Record the successful regression prediction in shared history.
+      onPrediction?.({
+        model: 'process',
+        prediction: reply.prediction,
+        target: reply.target,
+        modelName: reply.model,
+        featuresGiven: reply.features_given,
+        featuresImputed: reply.features_imputed,
+        clipped: reply.clipped,
+        inputType: 'Manual counters',
+        inputSummary: `${reply.features_given} counters provided, ${reply.features_imputed} imputed`,
+      })
     } catch (apiError) {
       setResult(null)
       setError(apiError.message)
