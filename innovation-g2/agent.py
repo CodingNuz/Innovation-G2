@@ -25,11 +25,11 @@ ATTACHMENT_TEXT_CHUNK = 6000
 # Only the most recent messages of the history are sent to the model.
 MAX_HISTORY_MESSAGES = 20
 
-# Chat model, served by an OpenAI-compatible MLX server on the LAN.
+# Chat model, served by an OpenAI-compatible MLX server (Unsloth Studio tunnel).
 # Override with LLM_BASE_URL / LLM_API_KEY / LLM_MODEL.
 DEFAULT_MODEL = "orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit"
-DEFAULT_BASE_URL = "http://100.107.98.17:8000/v1"
-DEFAULT_API_KEY = "sk-omlx-XtwkjfsneJr7XfiEvf0fcoMs"
+DEFAULT_BASE_URL = "https://contents-instructions-names-governmental.trycloudflare.com/v1"
+DEFAULT_API_KEY = "sk-unsloth-5d39f1e51153505c9923b775c2f3a388"
 
 # Reasoning eats tokens before the first visible word, and explaining a tool
 # result takes a paragraph. 800 cut answers off mid-sentence.
