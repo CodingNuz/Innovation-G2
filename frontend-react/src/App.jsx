@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import './App.css'
+import HomePage from './views/HomePage'
 import ChatView from './views/ChatView'
 import MalwareView from './views/MalwareView'
 import ProcessView from './views/ProcessView'
@@ -33,7 +34,7 @@ const TABS = [
 ]
 
 export default function App() {
-  const [tab, setTab] = useState('spam')
+  const [tab, setTab] = useState('home')
   const [aboutOpen, setAboutOpen] = useState(false)
   const [health, setHealth] = useState(null)
 
@@ -67,76 +68,96 @@ export default function App() {
     }
   }, [])
 
-  const Active = TABS.find((entry) => entry.id === tab).component
+  const Active = TABS.find((entry) => entry.id === tab)?.component
 
   return (
     <>
-      <header className="headah">
-        <a className="logo" href="#top">
-          <span className="spamchameleon">SpamChameleon</span>
-          <i className="fa-brands fa-opensuse" aria-hidden="true" />
-        </a>
+      {tab === 'home' ? (
+        <HomePage
+          onSelectModel={setTab}
+          onAboutClick={() => setAboutOpen(true)}
+        />
+      ) : (
+        <>
+          <header className="headah">
+            <a className="logo" href="#top" onClick={() => setTab('home')}>
+              <span className="spamchameleon">SpamChameleon</span>
+              <i className="fa-brands fa-opensuse" aria-hidden="true" />
+            </a>
 
-        <div className="headright">
-          {health ? (
-            <span
-              className={`health ${health.status === 'ok' && health.models_loaded ? 'ok' : 'bad'}`}
-              title="Backend status"
+            <div className="headright">
+              {health ? (
+                <span
+                  className={`health ${health.status === 'ok' && health.models_loaded ? 'ok' : 'bad'}`}
+                  title="Backend status"
+                >
+                  <i
+                    className={
+                      health.status === 'ok' && health.models_loaded
+                        ? 'fa-solid fa-circle-check'
+                        : 'fa-solid fa-triangle-exclamation'
+                    }
+                    aria-hidden="true"
+                  />
+                  {health.status === 'ok' && health.models_loaded
+                    ? 'model ready'
+                    : 'backend offline'}
+                </span>
+              ) : null}
+
+              <button
+                type="button"
+                className="butt aboutus"
+                onClick={() => setAboutOpen(true)}
+              >
+                about us <i className="fa-solid fa-circle-info" aria-hidden="true" />
+              </button>
+            </div>
+          </header>
+
+          <nav className="tabs" aria-label="Models">
+            <button
+              type="button"
+              className="tab"
+              onClick={() => setTab('home')}
             >
-              <i
-                className={
-                  health.status === 'ok' && health.models_loaded
-                    ? 'fa-solid fa-circle-check'
-                    : 'fa-solid fa-triangle-exclamation'
-                }
-                aria-hidden="true"
+              <i className="fa-solid fa-house" aria-hidden="true" />
+              <span>Home</span>
+            </button>
+
+            {TABS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`tab ${tab === entry.id ? 'active' : ''}`}
+                onClick={() => setTab(entry.id)}
+                aria-current={tab === entry.id ? 'page' : undefined}
+              >
+                <i className={entry.icon} aria-hidden="true" />
+                <span>{entry.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <main className="main" id="top">
+            {tab === 'history' ? (
+              <HistoryView
+                history={predictionHistory}
+                onClearHistory={clearHistory}
               />
-              {health.status === 'ok' && health.models_loaded ? 'model ready' : 'backend offline'}
-            </span>
-          ) : null}
+            ) : (
+              <Active onPrediction={recordPrediction} />
+            )}
+          </main>
 
-          <button
-            type="button"
-            className="butt aboutus"
-            onClick={() => setAboutOpen(true)}
-          >
-            about us <i className="fa-solid fa-circle-info" aria-hidden="true" />
-          </button>
-        </div>
-      </header>
-
-      <nav className="tabs" aria-label="Models">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            className={`tab ${tab === entry.id ? 'active' : ''}`}
-            onClick={() => setTab(entry.id)}
-            aria-current={tab === entry.id ? 'page' : undefined}
-          >
-            <i className={entry.icon} aria-hidden="true" />
-            <span>{entry.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      <main className="main" id="top">
-        {tab === 'history' ? (
-          <HistoryView
-            history={predictionHistory}
-            onClearHistory={clearHistory}
-          />
-        ) : (
-          <Active onPrediction={recordPrediction} />
-        )}
-      </main>
-
-      <footer className="footer">
-        <p>&copy; 2026 SpamChameleon</p>
-        <a href="mailto:trucdnx@gmail.com" className="mail">
-          <i className="fa-regular fa-envelope" aria-hidden="true" /> trucdnx@gmail.com
-        </a>
-      </footer>
+          <footer className="footer">
+            <p>&copy; 2026 SpamChameleon</p>
+            <a href="mailto:trucdnx@gmail.com" className="mail">
+              <i className="fa-regular fa-envelope" aria-hidden="true" /> trucdnx@gmail.com
+            </a>
+          </footer>
+        </>
+      )}
 
       {aboutOpen ? (
         <div
