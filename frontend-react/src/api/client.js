@@ -1,9 +1,9 @@
 // Calls to the FastAPI backend. Vite proxies /api in dev (see vite.config.js).
 
-const BASE = import.meta.env.VITE_API_BASE ?? ''
+const BASE = ''
 
 /** An API call that failed, with a message fit to show the user. */
-export class ApiError extends Error {
+class ApiError extends Error {
   constructor(message, status, detail) {
     super(message)
     this.name = 'ApiError'
@@ -158,19 +158,15 @@ function parseEvent(block) {
 // Endpoints the app uses, one function each.
 export const api = {
   health: () => apiGet('/api/health'),
-  model: () => apiGet('/api/model'),
   spam: (text) => apiPost('/api/spam', { text }),
   scanUpload: (files, platform) =>
     apiUpload('/api/scan/upload' + (platform ? `?platform=${platform}` : ''), files),
   malwarePlatforms: () => apiGet('/api/malware/platforms'),
-  malwareFeatures: (platform) =>
-    apiGet(`/api/malware/features?platform=${encodeURIComponent(platform)}`),
   malwareSchema: (platform) =>
     apiGet(`/api/malware/schema?platform=${encodeURIComponent(platform)}`),
   malware: (platform, features) =>
     apiPost('/api/malware', { platform, features }),
   malwareUpload: (file) => apiUpload('/api/scan/upload', [file]).then((r) => r.files[0]),
-  processFeatures: () => apiGet('/api/process/features'),
   processSchema: () => apiGet('/api/process/schema'),
   process: (features) => apiPost('/api/process', { features }),
   agentInfo: () => apiGet('/api/agent/info'),

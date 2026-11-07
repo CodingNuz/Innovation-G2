@@ -1,9 +1,5 @@
-# Rubrik
+# Course assignment briefs (local only).
 Assignment/
-
-# Rust build output
-target/
-**/*.rs.bk
 
 # ---------------------------------------------------------------------------
 # Files too large to push to GitHub.
@@ -24,29 +20,24 @@ target/
 # spam/clean_spam_dataset.py reads it, on the way to the file below.
 dataset/spam_train_dataset.csv
 
-# 98 MB. Under the hard limit but well over the 50 MB warning, so every clone
+# ~101 MB. Under the hard limit but well over the 50 MB warning, so every clone
 # would carry it. This is the file the spam model trains on, and it is on
 # Hugging Face.
 dataset/spam_train_clean.csv
 
 # Python environment and build artifacts
-.venv/
-venv/
-.venv_test/
+.venv*/
 __pycache__/
 *.py[cod]
-train_report.txt
+.pytest_cache/
+
+# Local secrets: copy .env.example to .env and never commit the copy.
+.env
 
 # Editor / OS noise
 .DS_Store
 .vscode/
 .idea/
+.cursor/
 .zcodeignore
-
-# Exploratory work: scripts and reports kept for reference, not part of the
-# final model pipeline (which is spam_malware_detection_model/).
-analysis/
-
-# The Roblox-style 3D world. It is a separate part of the work with its own
-# README in frontend-roblox/README.md, and it is not part of this project.
-frontend-roblox/
+*.log

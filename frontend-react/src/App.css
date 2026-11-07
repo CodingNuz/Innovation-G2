@@ -1,4 +1,4 @@
-/* SpamChameleon, React version. Styles follow the original static page. */
+/* SpamChameleon, React version. The single stylesheet for every view. */
 
 :root {
   --dark: #272343;
@@ -698,22 +698,6 @@ textarea::placeholder {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.chattext p + p {
-  margin-top: 8px;
-}
-.chatbullet {
-  padding-left: 14px;
-  text-indent: -14px;
-}
-.chattext strong {
-  font-weight: 700;
-}
-.chattext code {
-  background: var(--blue-light);
-  border-radius: 6px;
-  padding: 1px 5px;
-  font-size: 0.92em;
-}
 .chatmsg-user {
   align-self: flex-end;
   background: var(--yellow);
@@ -1282,11 +1266,6 @@ textarea::placeholder {
   background: rgba(212, 2, 2, 0.1);
   color: #8f0202;
   border: 2px solid rgba(212, 2, 2, 0.28);
-}
-.alert-info {
-  background: var(--blue-light);
-  color: var(--dark);
-  border: 2px solid var(--blue);
 }
 .alert-close {
   margin-left: auto;

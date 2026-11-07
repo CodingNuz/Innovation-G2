@@ -33,8 +33,7 @@ ChartJS.register(
   Tooltip,
 )
 
-// Palette copied from the original SpamChameleon stylesheet so the React
-// version and the static page match.
+// Shared chart palette, kept in step with App.css.
 export const palette = {
   dark: '#272343',
   yellow: '#ffd803',

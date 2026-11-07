@@ -7,8 +7,7 @@ learning, served by a FastAPI web application with a React front end.
 | --- | --- |
 | `spam_malware_detection_model/` | the training code, the saved models and the results |
 | `innovation-g2/` | the FastAPI back end that serves the models |
-| `frontend-react/` | the React front end (Vite) |
-| `frontend/` | the earlier hand-written page, kept as a fallback |
+| `frontend-react/` | the React front end (Vite) — the only front end |
 | `dataset/` | the raw Kaggle downloads and the training files built from them |
 
 ## Run the app
@@ -84,8 +83,8 @@ python main.py
 ```
 
 Then open <http://127.0.0.1:3000/>. The back end serves
-`frontend-react/dist/` when it exists, and falls back to the older
-hand-written page in `frontend/` when it does not.
+`frontend-react/dist/` when it exists; without a build, `/` returns 503 and
+the API is still available.
 
 ### 5. The API documentation
 
@@ -99,18 +98,19 @@ from the language model's memory: the model calls the same prediction code as
 the other tabs and explains the result it gets back. Each answer can be
 expanded to show the tool call and its raw output.
 
-The chat talks to an OpenAI-compatible server. The defaults in
-`agent.config()` point at the MLX server on the LAN:
+The chat talks to an OpenAI-compatible server. There are no built-in hosts or
+keys: copy `.env.example` to `.env` (or export the variables) and set:
 
-| setting | default |
+| setting | what it is |
 | --- | --- |
-| `LLM_BASE_URL` | `http://100.107.98.17:8000/v1` |
-| `LLM_MODEL` | `orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit` |
-| `LLM_API_KEY` | the `sk-omlx-...` key for that server |
+| `LLM_BASE_URL` | base URL of any OpenAI-compatible server, e.g. `http://localhost:8000/v1` |
+| `LLM_MODEL` | the model ID that server exposes |
+| `LLM_API_KEY` | its API key (never committed) |
 
-With that server running, `cd innovation-g2 && python main.py` needs no
-variables. Override any of the three to point elsewhere; any
-OpenAI-compatible server works, including a local one.
+`LLM_TIMEOUT` is optional (default 300 seconds). With the variables set,
+`cd innovation-g2 && python main.py` needs nothing else. Without them the API
+still starts and the other tabs work, but a chat request returns a clear
+"model server is not configured" error.
 `GET /api/agent/info` reports whether the server is reachable and whether
 the configured model is one it serves.
 
@@ -129,14 +129,14 @@ A PDF or text file is scored by the spam model on its extracted text; a PE or
 APK is scored by the malware models. An unsupported file is refused with 415.
 
 Pictures are accepted in the Assistant tab only. Reading a screenshot is a job
-the assistant does before any model can judge it: the vision model looks at
-the image and writes out the visible text, and that text is then handed to the
-same spam model the Spam tab uses. A screenshot of a phishing email therefore
-gets the same verdict as the email pasted in as text, and the two paths cannot
-drift apart. Local OCR (`tesseract`, read from stdin, so still nothing on
-disk) runs on the same bytes as a second reader; if neither finds any text the
-assistant says so instead of inventing a verdict. Large images are halved until
-they fit 1600 px on the long side, which keeps the request small.
+the assistant does before any model can judge it: the vision model is the only
+reader, it writes out the visible text and passes that transcription to
+`scan_attachment`, which scores it with the same spam model the Spam tab uses.
+A screenshot of a phishing email therefore gets the same verdict as the email
+pasted in as text, and there is no second reader for the two paths to drift
+apart on. If the model cannot read any text it says so instead of inventing a
+verdict. Large images are halved until they fit 1600 px on the long side, which
+keeps the request small.
 
 `POST /api/scan/upload` refuses a picture and points at the Assistant tab.
 
@@ -186,16 +186,19 @@ and in the `INFO.md` file inside each source folder.
   languages. SMS is the weakest part (F1 0.745 to 0.785 on an unseen SMS source,
   and about 0.38 precision on ordinary SMS where 9% of messages are spam).
 - Each malware model only understands its own platform's feature columns.
-- **Scanning a file.** `POST /api/malware/upload` (also the "Scan a file" box on the
-  malware screen) takes a Windows `.exe`/`.dll` or an Android `.apk`. The platform is
-  detected from the bytes: `pefile` reads the 50 PE header fields, `androguard` reads the
-  manifest permissions and the API calls in every `classes.dex`. An APK is scored by the
-  three Android models and the majority vote is the verdict. The file is parsed and never
-  run. The models are unchanged, so they keep their limits: a clean 64-bit or unusual PE
+- **Scanning a file.** `POST /api/scan/upload` (also the "Scan a file" box on the
+  malware screen) takes one or more files in a `files` field: a Windows `.exe`/`.dll`,
+  an Android `.apk`, a PDF or a text/email message. The bytes decide which model
+  runs: `pefile` reads the 50 PE header fields, `androguard` reads the manifest
+  permissions and the API calls in every `classes.dex`, and a PDF or message is
+  scored by the spam model on its extracted text. An APK is scored by the three
+  Android models and the majority vote is the verdict. Pass `platform=...` to
+  score a PE/APK with one named model only. The file is parsed and never run.
+  The models are unchanged, so they keep their limits: a clean 64-bit or unusual PE
   can score as malware (the Windows model reaches F1 0.75 to 0.89 on files from a new
   source), and only the features that the file itself provides are used.
   ```bash
-  curl -F file=@sample.apk http://127.0.0.1:3000/api/malware/upload
+  curl -F files=@sample.apk http://127.0.0.1:3000/api/scan/upload
   ```
   The upload is read, never run, and the file is not kept. The `python-multipart`,
   `pefile` and `androguard` packages it needs are in `innovation-g2/requirements.txt`

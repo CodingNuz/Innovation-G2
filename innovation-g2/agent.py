@@ -25,11 +25,9 @@ ATTACHMENT_TEXT_CHUNK = 6000
 # Only the most recent messages of the history are sent to the model.
 MAX_HISTORY_MESSAGES = 20
 
-# Chat model, served by an OpenAI-compatible MLX server (Unsloth Studio tunnel).
-# Override with LLM_BASE_URL / LLM_API_KEY / LLM_MODEL.
-DEFAULT_MODEL = "orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit"
-DEFAULT_BASE_URL = "https://contents-instructions-names-governmental.trycloudflare.com/v1"
-DEFAULT_API_KEY = "sk-unsloth-5d39f1e51153505c9923b775c2f3a388"
+# The chat model lives on an OpenAI-compatible server. There are no built-in
+# hosts or keys: set LLM_BASE_URL / LLM_API_KEY / LLM_MODEL in the environment
+# (see .env.example at the repository root). Secrets never go in this file.
 
 # Reasoning eats tokens before the first visible word, and explaining a tool
 # result takes a paragraph. 800 cut answers off mid-sentence.
@@ -64,12 +62,12 @@ SYSTEM_PROMPT = (
 ATTACHMENT_PROMPT = (
     "\nA file is attached to this turn and its contents are NOT in this "
     "prompt.  Rules for it:\n"
-    "6. The user message already names the file and its type.  Do not call a "
-    "tool to find that out again.  Never guess what a file contains.\n"
+    "6. The user message already names the file and its type.  Never guess "
+    "what a file contains; call get_attachment only if you need the hash, "
+    "links or notes.\n"
     "7. For a PDF, email or text file, call read_attachment_text, then "
     "scan_attachment for the spam verdict.  A long document needs more than "
-    "one read: pass the offset the previous reply returned.  Call "
-    "get_attachment only when you need the hash, the links or the notes.\n"
+    "one read: pass the offset the previous reply returned.\n"
     "8. For a Windows PE or Android APK, call scan_attachment; the file has "
     "already been parsed by the malware models.\n"
     "9. Report the verdict and probability exactly as the tool returned them, "
@@ -77,8 +75,8 @@ ATTACHMENT_PROMPT = (
     "them."
 )
 
-# A picture has no text layer: the assistant reads the text out of the image
-# and hands it to the spam model.
+# A picture has no text layer: the assistant is its only reader, and hands
+# what it reads to the spam model.
 IMAGE_PROMPT = (
     "\nThe attached file is a picture, and you can see it directly.  Your job "
     "on this turn is to turn the picture into a message and then have the "
@@ -86,11 +84,13 @@ IMAGE_PROMPT = (
     "10. Read the visible text out of the picture and write it out, keeping the "
     "sender, subject, body, amounts and links as they appear.  Say plainly "
     "when something is not legible instead of guessing it.\n"
-    "11. Then call scan_attachment.  That tool scores the text that was read "
-    "from the picture with the same spam model the Spam tab uses.\n"
+    "11. Then call scan_attachment and pass that text in the text argument, "
+    "copied exactly as you read it.  The tool scores what you pass with the "
+    "same spam model the Spam tab uses.  Never call it with empty text: you "
+    "are the only reader, so without your copy there is nothing to score.\n"
     "12. Report that verdict and its probability as the answer, and say which "
-    "words pushed the score.  If the tool refuses because no text could be "
-    "read, say that instead of inventing a verdict.\n"
+    "words pushed the score.  If you truly cannot read any text, say that "
+    "instead of inventing a verdict.\n"
     "13. A picture by itself is not evidence of malware.  Judge only the text "
     "you read out of it."
 )
@@ -168,8 +168,9 @@ ATTACHMENT_TOOL_SPECS = [
     _tool(
         "get_attachment",
         "Describe the attached file: name, size, sha256, type, page count, "
-        "links and notes (embedded files, active content, metadata).  Call this "
-        "first when a file is attached.",
+        "links and notes (embedded files, active content, metadata).  Call "
+        "only if you need those details; the user message already names the "
+        "file and its type.",
         {},
         [],
     ),
@@ -190,14 +191,39 @@ ATTACHMENT_TOOL_SPECS = [
         "scan_attachment",
         "Score the attached file with the trained models: the spam model for a "
         "PDF, email or text file, the malware models for a PE or APK.  Returns "
-        "the verdict and probability.",
-        {},
+        "the verdict and probability.  For a picture, pass the text you read "
+        "out of it; that is what the spam model scores.",
+        {
+            "text": {"type": "string",
+                     "description": "For a picture: the text you read out of it, "
+                                    "copied exactly.  Leave empty for other files."},
+        },
         [],
     ),
 ]
 
 # Tool names the chat exposes; three more when a file is attached.
 ATTACHMENT_TOOL_NAMES = [spec["function"]["name"] for spec in ATTACHMENT_TOOL_SPECS]
+
+
+def _scan_with_reading(attachment, reading) -> Dict[str, Any]:
+    """Score the file, using the text the model read when it gives one.
+
+    A picture has no text layer, so the vision model is the only reader: it
+    copies what it sees into this tool, and that copy is what the spam model
+    scores. Other kinds keep their own extracted text.
+    """
+    text = (reading or "").strip() if isinstance(reading, str) else ""
+    if text and attachment.kind == "image":
+        return predict.spam_file_reply(
+            text, attachment,
+            "text the model read from the picture (%d characters)" % len(text))
+    # A caller may hand over a corrected transcript for another kind of file
+    # when the file has no usable text of its own.
+    if text and attachment.scan is None and not attachment.text.strip():
+        return predict.spam_file_reply(text, attachment,
+                                       "text supplied by the caller")
+    return attachments.scan(attachment)
 
 
 def clean_reply(text: str) -> str:
@@ -264,7 +290,7 @@ def run_tool(name: str, args: Dict[str, Any],
                 return attachment.summary()
             if name == "read_attachment_text":
                 return _read_attachment_text(attachment, args)
-            return attachments.scan(attachment)
+            return _scan_with_reading(attachment, args.get("text"))
 
         if name == "check_spam":
             text = args.get("text")
@@ -301,13 +327,30 @@ class LLMUnavailable(RuntimeError):
 
 
 def config() -> Dict[str, Any]:
-    """Read the server settings from the environment on each call."""
+    """Read the server settings from the environment on each call.
+
+    Nothing is hard-coded: an unset base URL or key leaves an empty value, so
+    /api/agent/info and the status probe still work. An actual chat request
+    reports the missing configuration as an LLMUnavailable error instead.
+    """
+    base_url = (os.getenv("LLM_BASE_URL") or "").rstrip("/")
     return {
-        "base_url": os.getenv("LLM_BASE_URL", DEFAULT_BASE_URL).rstrip("/"),
-        "api_key": os.getenv("LLM_API_KEY") or DEFAULT_API_KEY,
-        "model": os.getenv("LLM_MODEL", DEFAULT_MODEL),
+        "base_url": base_url,
+        "api_key": os.getenv("LLM_API_KEY") or None,
+        "model": os.getenv("LLM_MODEL") or "",
         "timeout": float(os.getenv("LLM_TIMEOUT", str(DEFAULT_TIMEOUT))),
     }
+
+
+def _require_config(settings: Dict[str, Any]) -> None:
+    """Fail clearly at chat time when the model server is not configured."""
+    missing = [name for name, value in
+               (("LLM_BASE_URL", settings["base_url"]),
+                ("LLM_MODEL", settings["model"])) if not value]
+    if missing:
+        raise LLMUnavailable(
+            "the model server is not configured: set %s (see .env.example)"
+            % ", ".join(missing))
 
 
 def _headers(api_key: Optional[str]) -> Dict[str, str]:
@@ -319,6 +362,8 @@ def _headers(api_key: Optional[str]) -> Dict[str, str]:
 
 def masked_base_url(base_url: str) -> str:
     """Base URL with any credentials removed, safe for a status endpoint."""
+    if not base_url:
+        return ""
     return re.sub(r"//[^/@]+@", "//", base_url)
 
 
@@ -330,6 +375,10 @@ def default_client() -> httpx.Client:
 def server_status(client: Optional[httpx.Client] = None) -> Dict[str, Any]:
     """Ask the model server which models it serves (GET /api/agent/info)."""
     settings = config()
+    if not settings["base_url"]:
+        # No server is configured; don't probe a relative URL.
+        return {"reachable": False, "error": "LLM_BASE_URL is not set",
+                "model_in_use": settings["model"]}
     own_client = client is None
     client = client or httpx.Client(timeout=5.0)
     try:
@@ -429,6 +478,7 @@ def chat(prompt: str,
     adds three file tools (the bytes never enter the transcript).
     """
     settings = config()
+    _require_config(settings)
     own_client = client is None
     client = client or default_client()
 

@@ -1,15 +1,14 @@
 """Read an attached file in memory and describe it.
 
-Nothing touches disk and nothing is executed. Pictures get a vision pass plus
-OCR text for the spam model. Malware scanning reuses extract.py.
+Nothing touches disk and nothing is executed. Pictures carry only the bytes
+for the vision model: the assistant reads the visible text out of them and
+passes the transcription to the spam model. Malware scanning reuses extract.py.
 """
 
 import hashlib
 import html
 import io
 import re
-import subprocess
-import shutil
 import zipfile
 from email import message_from_bytes
 from typing import Any, Dict, List
@@ -284,11 +283,12 @@ def inspect_text(data: bytes, filename: str) -> Attachment:
                       links=_unique(LINK_RE.findall(text)))
 
 
-def inspect_binary(data: bytes, kind: str, filename: str) -> Attachment:
+def inspect_binary(data: bytes, kind: str, filename: str,
+                   platform: str = None) -> Attachment:
     """Scan a PE or APK with the same parser as the Malware tab."""
     import extract
 
-    scan = extract.scan(data, filename)
+    scan = extract.scan(data, filename, platform)
     notes = ["scanned by %d model(s); %d voted malware"
              % (len(scan["results"]), scan["models_voting_malware"])]
     if kind == "pe":
@@ -326,56 +326,28 @@ def _shrink_image(data: bytes) -> bytes:
         return data
 
 
-def ocr_text(data: bytes) -> str:
-    """OCR a picture with the local tesseract; returns "" if it isn't installed."""
-    if not shutil.which("tesseract"):
-        return ""
-    try:
-        done = subprocess.run(["tesseract", "stdin", "stdout"],
-                              input=data, capture_output=True, timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    if done.returncode != 0:
-        return ""
-    text = done.stdout.decode("utf-8", "replace").strip()
-    return text[:MAX_TEXT_CHARS]
-
-
 def inspect_image(data: bytes, filename: str) -> Attachment:
     """Picture attachment. The sha256 covers the original bytes, not the downscaled ones."""
     import base64
 
     prepared = _shrink_image(data)
-    mime = _image_mime(prepared) if prepared is not data else _image_mime(data)
-    if prepared is not data:
-        mime = "image/png"
-    text = ocr_text(prepared)
-
-    notes = ["a picture, read by the vision model"]
-    if text:
-        notes.append("OCR found %d characters of text" % len(text))
-    else:
-        notes.append("no readable text was found by OCR")
-
+    mime = "image/png" if prepared is not data else _image_mime(data)
     image = {
         "data_url": "data:%s;base64,%s" % (mime, base64.b64encode(prepared).decode()),
         "question": "",
     }
-    attachment = Attachment(filename, data, "image", text=text, notes=notes,
-                            image=image)
-    # The model gets the file name. The caller fills in the question, since it
-    # knows what the user asked.
-    image["question"] = "Look at the attached picture."
-    return attachment
+    # The caller fills in the question, since it knows what the user asked.
+    return Attachment(filename, data, "image",
+                      notes=["a picture, read by the vision model"], image=image)
 
 
-def inspect(data: bytes, filename: str = "") -> Attachment:
+def inspect(data: bytes, filename: str = "", platform: str = None) -> Attachment:
     """Parse one attachment. Raises UnsupportedFile or ValueError."""
     kind = detect_kind(data, filename)
     if kind == "pdf":
         return inspect_pdf(data, filename)
     if kind in ("pe", "apk"):
-        return inspect_binary(data, kind, filename)
+        return inspect_binary(data, kind, filename, platform)
     if kind == "image":
         return inspect_image(data, filename)
     if kind == "email":
@@ -394,20 +366,9 @@ def scan(attachment: Attachment) -> Dict[str, Any]:
         return {**attachment.scan, "kind": "malware"}
     if not attachment.text.strip():
         if attachment.kind == "image":
-            raise ValueError("%s is a picture with no readable text, so there "
-                             "is nothing for the spam model to score"
+            raise ValueError("%s is a picture: ask the assistant to read its "
+                             "text and pass it to scan_attachment before scoring"
                              % attachment.filename)
         raise ValueError("%s %s has no text to score"
                          % (attachment.kind, attachment.filename))
-    reply = predict.predict_spam(attachment.text)
-    # predict_spam answers about a message, not a file, so the file facts
-    # for display are added here.
-    reply["filename"] = attachment.filename
-    reply["size"] = attachment.size
-    reply["sha256"] = attachment.sha256
-    reply["kind"] = "spam"
-    if attachment.kind == "image":
-        # Say where the text came from, so a verdict on a photo isn't read as
-        # a verdict on the picture.
-        reply["scored_on"] = "text read from the picture by OCR"
-    return reply
+    return predict.spam_file_reply(attachment.text, attachment)
