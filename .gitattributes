@@ -3,7 +3,7 @@
 # to LF would create a needless diff and break the checksums in the report.
 dataset/**/*.csv -text
 
-# The trained model is a scikit-learn pickle. It is small (about 3 MB), so it
-# is committed directly rather than through Git LFS, which would require every
+# The trained model is a scikit-learn pickle. It is about 6 MB, so it is
+# committed directly rather than through Git LFS, which would require every
 # user to install git-lfs before they could clone the project.
 spam_malware_detection_model/combined_model.joblib -text

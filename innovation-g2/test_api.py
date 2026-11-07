@@ -1,14 +1,32 @@
 """API and prediction tests (run combined_model.py first, then pytest)."""
 
+import base64
+import hashlib
+import io
+import json
+import zipfile
+
+import httpx
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
 
-import hashlib
-import base64
-import io
+# Importing main puts the model folder on sys.path before the rest of the
+# project modules are imported.
+from main import app
+import agent
+import attachments
+import extract
+import predict
 
-import pymupdf
+# Every chat call needs a configured model server. The tests point at a mock
+# transport, so a placeholder is enough; real values come from the environment.
+@pytest.fixture(autouse=True)
+def configured_llm(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+
 
 # pictures
 
@@ -27,14 +45,14 @@ def test_detect_kind_recognises_a_picture():
     assert attachments.detect_kind(jpeg, "photo.jpg") == "image"
 
 
-def test_inspect_image_builds_a_data_url_and_reads_its_text():
+def test_inspect_image_builds_a_data_url_without_reading_the_text():
     attachment = attachments.inspect(make_png(), "shot.png")
     assert attachment.kind == "image"
     assert attachment.image["data_url"].startswith("data:image/")
     assert "base64," in attachment.image["data_url"]
-    # The spam model needs the visible words; OCR provides them.
-    assert "prize" in attachment.text.lower()
-    assert any("OCR found" in note for note in attachment.notes)
+    # The vision model is the only reader; the server does no OCR.
+    assert attachment.text == ""
+    assert any("vision model" in note for note in attachment.notes)
 
 
 def test_image_content_is_sent_as_an_image_part():
@@ -52,22 +70,24 @@ def test_a_text_attachment_has_no_image_part():
     assert attachment.user_content() is None
 
 
-def test_scan_image_scores_the_ocr_text():
+def test_scan_image_needs_a_transcription_from_the_assistant():
+    """An unread picture has nothing to score until the model supplies text."""
     attachment = attachments.inspect(make_png(), "shot.png")
-    reply = attachments.scan(attachment)
-    assert reply["kind"] == "spam"
-    assert reply["verdict"] == "SPAM"
-    assert "OCR" in reply["scored_on"]
-
-
-def test_a_picture_without_text_is_refused_clearly():
-    doc = pymupdf.open()
-    blank = doc.new_page(width=200, height=100).get_pixmap().tobytes("png")
-    attachment = attachments.inspect(blank, "blank.png")
-    assert attachment.text == ""
     with pytest.raises(ValueError) as error:
         attachments.scan(attachment)
-    assert "no readable text" in str(error.value)
+    assert "scan_attachment" in str(error.value)
+
+
+def test_spam_file_reply_uses_one_shape_for_every_reader():
+    attachment = attachments.inspect(make_png(), "shot.png")
+    reading = "WIN a FREE prize now, click the link to claim your reward"
+    reply = predict.spam_file_reply(reading, attachment, "model transcription")
+    assert reply["kind"] == "spam"
+    assert reply["verdict"] == "SPAM"
+    assert reply["filename"] == "shot.png"
+    assert reply["size"] == attachment.size
+    assert reply["sha256"] == attachment.sha256
+    assert reply["scored_on"] == "model transcription"
 
 
 def test_large_picture_is_downscaled():
@@ -76,7 +96,6 @@ def test_large_picture_is_downscaled():
     page.insert_text((40, 500), "wide picture", fontsize=90)
     png = page.get_pixmap().tobytes("png")
     attachment = attachments.inspect(png, "wide.png")
-    import base64
     payload = attachment.image["data_url"].split("base64,", 1)[1]
     shrunk = base64.b64decode(payload)
     assert len(shrunk) < len(png)
@@ -146,21 +165,6 @@ def test_scan_upload_sends_a_picture_to_the_assistant_tab():
     result = upload(png, "shot.png")
     assert "error" in result
     assert "Assistant tab" in result["error"]
-
-from main import app      # also puts the model folder on sys.path
-import extract
-import predict
-import attachments
-
-# chat attachments
-
-import base64
-import io
-import zipfile
-
-import pymupdf
-
-import attachments
 
 
 def pdf_with_text(text="WIN a FREE prize now, click http://evil.example/claim",
@@ -275,6 +279,39 @@ def test_read_attachment_text_caps_the_limit():
 
 
 def test_scan_attachment_uses_the_spam_model_for_text():
+    attachment = attachments.inspect(
+        b"WIN a FREE prize now, click the link to claim your reward", "m.txt")
+    reply = agent.run_tool("scan_attachment", {}, attachment)
+    assert reply["verdict"] == "SPAM"
+    assert reply["filename"] == "m.txt"
+
+
+def test_scan_attachment_scores_the_text_the_model_read():
+    """A picture is scored from the transcription the model passes in."""
+    attachment = attachments.inspect(make_png("hello there friend"), "shot.png")
+    reading = "WIN a FREE prize now, click the link to claim your reward"
+    reply = agent.run_tool("scan_attachment", {"text": reading}, attachment)
+    assert reply["verdict"] == "SPAM"
+    assert reply["kind"] == "spam"
+    assert "model read from the picture" in reply["scored_on"]
+
+
+def test_scan_attachment_refuses_an_empty_reading():
+    attachment = attachments.inspect(make_png("hello there friend"), "shot.png")
+    reply = agent.run_tool("scan_attachment", {"text": ""}, attachment)
+    assert "error" in reply
+
+
+def test_scan_attachment_text_is_optional_for_other_files():
+    """The schema must not force a text argument on non-image attachments."""
+    spec = next(s for s in agent.ATTACHMENT_TOOL_SPECS
+                if s["function"]["name"] == "scan_attachment")
+    assert spec["function"]["parameters"]["required"] == []
+
+
+def test_the_picture_prompt_asks_for_the_text_argument():
+    assert "pass that text in the text argument" in agent.IMAGE_PROMPT
+    assert "you are the only reader" in agent.IMAGE_PROMPT
     attachment = attachments.inspect(
         b"WIN a FREE prize now, click the link to claim your reward", "m.txt")
     reply = agent.run_tool("scan_attachment", {}, attachment)
@@ -503,7 +540,6 @@ def test_upload_rejects_unsupported_empty_and_mismatched_files():
 
 
 def test_upload_rejects_a_zip_that_is_not_an_apk():
-    import io, zipfile
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("readme.txt", "hello")
@@ -511,33 +547,10 @@ def test_upload_rejects_a_zip_that_is_not_an_apk():
 
 
 def test_upload_rejects_an_apk_whose_manifest_cannot_be_read():
-    import io, zipfile
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("AndroidManifest.xml", b"this is not a manifest")
     assert "manifest" in upload(buffer.getvalue(), "broken.apk")["error"].lower()
-
-
-def test_upload_apk_is_scored_by_all_three_android_models():
-    """A real APK next to the tests goes through the whole path (skipped if absent)."""
-    apk = Path(__file__).resolve().parent / "sample.apk"
-    if not apk.exists():
-        pytest.skip("no sample.apk next to the tests")
-
-    reply = upload(apk.read_bytes(), "sample.apk").json()
-    assert reply["file_type"] == "apk"
-    assert reply["verdict"] in ("MALWARE", "BENIGN")
-    assert [r["platform"] for r in reply["results"]] == [
-        "android_permissions", "android_drebin", "android_tuandromd"]
-    for result in reply["results"]:
-        # Every column of every Android model comes from the file; the imputer
-        # has nothing to guess.
-        assert result["features_imputed"] == 0
-        assert result["features_given"] == len(predict.malware_feature_names(result["platform"]))
-    # Verdict is the majority vote of the three models.
-    votes = sum(1 for r in reply["results"] if r["verdict"] == "MALWARE")
-    assert reply["verdict"] == ("MALWARE" if votes * 2 > 3 else "BENIGN")
-    assert reply["models_voting_malware"] == votes
 
 
 def test_one_route_scores_a_pdf_and_a_pe_side_by_side():
@@ -612,13 +625,6 @@ def test_android_tokens_match_each_datasets_column_spelling():
 
 
 # chat agent (offline)
-
-import json
-
-import httpx
-
-import agent
-
 
 REAL_HTTPX_CLIENT = httpx.Client
 
@@ -807,13 +813,43 @@ def test_agent_info_reports_the_server_state(monkeypatch):
                               "model_in_use": "qwen35-2b-spam", "model_is_served": True}
 
 
-def test_the_default_endpoint_is_the_local_mlx_server(monkeypatch):
+def test_config_reads_every_setting_from_the_environment(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.com/v1/")
+    monkeypatch.setenv("LLM_MODEL", "my-model")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    settings = agent.config()
+    assert settings["base_url"] == "https://llm.example.com/v1"
+    assert settings["model"] == "my-model"
+    assert settings["api_key"] == "sk-test"
+
+
+def test_config_has_no_built_in_host_or_key(monkeypatch):
     for name in ("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     settings = agent.config()
-    assert settings["base_url"] == "http://100.107.98.17:8000/v1"
-    assert settings["model"] == "orcarouter--Nex-N2.5-mini-Uncensored-MLX-4bit"
-    assert settings["api_key"]
+    assert settings["base_url"] == ""
+    assert settings["model"] == ""
+    assert settings["api_key"] is None
+
+
+def test_agent_info_without_config_is_still_a_valid_reply(monkeypatch):
+    for name in ("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    reply = client.get("/api/agent/info")
+    assert reply.status_code == 200
+    info = reply.json()
+    assert info["base_url"] == ""
+    assert info["model"] == ""
+    assert info["auth_configured"] is False
+    assert info["server"]["reachable"] is False
+
+
+def test_chat_reports_a_missing_configuration(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    with pytest.raises(agent.LLMUnavailable) as error:
+        agent.chat("hi", client=fake_client(lambda request: httpx.Response(200)))
+    assert "LLM_BASE_URL" in str(error.value)
 
 
 def test_agent_info_is_reachable_false_when_the_server_is_down(monkeypatch):

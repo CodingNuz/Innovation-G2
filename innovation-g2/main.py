@@ -30,7 +30,6 @@ FRONTEND_BUILT = (FRONTEND / "index.html").exists()
 # predict.py and friends live next to the trained models.
 sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
 import predict  # noqa: E402
-import extract  # noqa: E402
 import agent  # noqa: E402
 import attachments  # noqa: E402
 
@@ -244,7 +243,7 @@ def scan_upload(files: List[UploadFile] = File(...),
                           "error": "larger than %d MB" % (MAX_UPLOAD_BYTES >> 20)})
             continue
         try:
-            attachment = attachments.inspect(data, name)
+            attachment = attachments.inspect(data, name, platform)
             if attachment.kind == "image":
                 raise ValueError(
                     "%s is a picture; attach it in the Assistant tab, which reads "
@@ -253,10 +252,8 @@ def scan_upload(files: List[UploadFile] = File(...),
                 raise ValueError("platform only applies to a Windows PE or an "
                                  "Android APK, and %s is a %s file"
                                  % (name, attachment.kind))
-            result = attachments.scan(attachment)
-            if platform:
-                result = dict(extract.scan(data, name, platform), kind="malware")
-            reply.append(result)
+            # inspect() already ran the malware scan with the chosen platform.
+            reply.append(attachments.scan(attachment))
         except (attachments.UnsupportedFile, ValueError) as error:
             reply.append({"filename": name, "error": str(error)})
     return {"files": reply}

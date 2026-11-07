@@ -30,7 +30,9 @@ const TABS = [
     icon: 'fa-solid fa-comments',
     component: ChatView,
   },
-  { id: 'history', label: 'History', icon: 'fa-solid fa-clock-rotate-left', component: HistoryView },
+  // History takes different props, so it is rendered directly below rather
+  // than through the `component` field.
+  { id: 'history', label: 'History', icon: 'fa-solid fa-clock-rotate-left' },
 ]
 
 export default function App() {

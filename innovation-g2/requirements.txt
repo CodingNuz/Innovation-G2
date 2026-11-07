@@ -1,3 +1,4 @@
+# Runtime: FastAPI service, the trained models and file parsing.
 fastapi
 uvicorn[standard]
 pydantic
@@ -8,10 +9,12 @@ joblib
 python-multipart
 pefile
 androguard
-# the /api/chat agent talks to the fine-tuned LLM on an OpenAI-compatible
-# server (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL); the model itself runs there
+loguru
 httpx
-# tests (python -m pytest test_api.py)
-pytest
 PyMuPDF
-python-multipart
+
+# Training and report scripts (combined_model.py, analyze_data.py).
+matplotlib
+
+# Tests (cd innovation-g2 && python -m pytest test_api.py).
+pytest
