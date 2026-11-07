@@ -9,6 +9,7 @@ import ProcessView from './views/ProcessView'
 import SpamView from './views/SpamView'
 import { api } from './api/client'
 import HistoryView from './views/HistoryView'
+import backgroundGif from './views/assets/background.gif'
 
 const TABS = [
   { id: 'spam', label: 'Spam', icon: 'fa-solid fa-envelope', component: SpamView },
@@ -81,7 +82,12 @@ export default function App() {
           onHistoryClick={() => setTab('history')}
         />
       ) : (
-        <>
+        <div className="view-page">
+          <div
+            className="view-bg"
+            style={{ backgroundImage: `url(${backgroundGif})` }}
+            aria-hidden="true"
+          />
           <header className="headah">
             <a className="logo" href="#top" onClick={() => setTab('home')}>
               <span className="spamchameleon">SpamChameleon</span>
@@ -145,7 +151,7 @@ export default function App() {
               <i className="fa-regular fa-envelope" aria-hidden="true" /> trucdnx@gmail.com
             </a>
           </footer>
-        </>
+        </div>
       )}
 
       {aboutOpen ? (

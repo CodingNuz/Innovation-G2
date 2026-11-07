@@ -248,7 +248,12 @@ button:focus-visible {
   max-width: 100%;
   min-height: 470px;
   padding: 0 35px 27px;
-  background: var(--blue);
+
+  background: rgba(186, 232, 232, 0.38);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+
   border-radius: 62px;
   display: flex;
   flex-direction: column;
@@ -613,10 +618,13 @@ textarea::placeholder {
   width: 100%;
   min-height: 640px;
   padding: 0 32px 24px;
-  background: var(--blue);
+  background: rgba(186, 232, 232, 0.38);
   border-radius: 62px;
   display: flex;
   flex-direction: column;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
 }
 
 .chathead {
@@ -1109,7 +1117,12 @@ textarea::placeholder {
   width: 368px;
   flex: none;
   padding: 40px 28px 28px;
-  background: var(--blue-light);
+
+  background: rgba(186, 232, 232, 0.38);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+
   border-radius: 62px;
   display: flex;
   flex-direction: column;
@@ -1236,18 +1249,28 @@ textarea::placeholder {
 }
 .chartarea {
   position: relative;
-  height: 230px;
+  width: 100%;
+  max-width: 400px;
+  height: 210px;
+  box-sizing: border-box;
+  margin: 0 auto;
   background: #fff;
   border-radius: 20px;
   padding: 10px;
 }
+
 .chartarea-square {
-  height: 240px;
+  height: 220px;
 }
 .chartnote {
   margin: 8px 0 0;
   font-size: 12px;
   color: #5d5a7a;
+}
+
+.chartarea canvas {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* alerts */
@@ -1530,6 +1553,10 @@ textarea::placeholder {
     padding: 0 14px 18px;
     border-radius: 34px;
     min-height: 0;
+    background: rgba(186, 232, 232, 0.38);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
   }
   .chathead {
     padding-top: 22px;
@@ -1613,7 +1640,12 @@ textarea::placeholder {
   max-width: 100%;
   min-width: 0;
   padding: 0 28px 28px;
-  background: var(--blue);
+
+  background: rgba(186, 232, 232, 0.38);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+
   border-radius: 56px;
 }
 
@@ -1632,7 +1664,7 @@ textarea::placeholder {
   flex-direction: column;
   gap: 26px;
   padding: 30px 32px 28px;
-  background: var(--blue-light);
+  background: transparent;
   border-radius: 44px;
 }
 
@@ -2215,4 +2247,32 @@ textarea::placeholder {
 .back-home:focus-visible {
   outline: 3px solid var(--dark);
   outline-offset: 2px;
+}
+
+/* ---------- View page background ---------- */
+
+.view-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.view-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-color: #0b1b2b;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.view-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(228, 232, 235, 0.82);
 }

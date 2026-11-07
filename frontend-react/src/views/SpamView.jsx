@@ -12,7 +12,7 @@ const EXAMPLES = {
   ham: 'Are we still meeting for lunch tomorrow at the office?',
 }
 
-export default function SpamView(onPrediction) {
+export default function SpamView({onPrediction}) {
   const [text, setText] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
