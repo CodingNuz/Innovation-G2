@@ -156,6 +156,40 @@
   justify-self: end;
 }
 
+.hp-models-group {
+  width: 100%;
+  max-width: 700px;
+  justify-self: end;
+}
+
+.hp-history {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 131px;
+  height: 40px;
+  margin: 16px auto 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--hp-yellow);
+  color: var(--hp-ink);
+  font: 700 19px 'Lato', sans-serif;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.hp-history:hover {
+  opacity: 1;
+}
+
+.hp-history:focus-visible {
+  outline: 3px solid var(--hp-ink);
+  outline-offset: 3px;
+}
+
 .hp-hint {
   position: absolute;
   left: 4%;

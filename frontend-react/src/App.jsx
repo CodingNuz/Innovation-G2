@@ -76,6 +76,7 @@ export default function App() {
         <HomePage
           onSelectModel={setTab}
           onAboutClick={() => setAboutOpen(true)}
+          onHistoryClick={() => setTab('history')}
         />
       ) : (
         <>
@@ -84,7 +85,7 @@ export default function App() {
               <span className="spamchameleon">SpamChameleon</span>
               <i className="fa-brands fa-opensuse" aria-hidden="true" />
             </a>
-
+ 
             <div className="headright">
               {health ? (
                 <span
@@ -115,40 +116,26 @@ export default function App() {
             </div>
           </header>
 
-          <nav className="tabs" aria-label="Models">
-            <button
-              type="button"
-              className="tab"
-              onClick={() => setTab('home')}
-            >
-              <i className="fa-solid fa-house" aria-hidden="true" />
-              <span>Home</span>
-            </button>
-
-            {TABS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={`tab ${tab === entry.id ? 'active' : ''}`}
-                onClick={() => setTab(entry.id)}
-                aria-current={tab === entry.id ? 'page' : undefined}
-              >
-                <i className={entry.icon} aria-hidden="true" />
-                <span>{entry.label}</span>
-              </button>
-            ))}
-          </nav>
-
           <main className="main" id="top">
             {tab === 'history' ? (
-              <HistoryView
-                history={predictionHistory}
-                onClearHistory={clearHistory}
-              />
+              <HistoryView history={predictionHistory} onClearHistory={clearHistory} />
             ) : (
-              <Active onPrediction={recordPrediction} />
+              <Active
+                onPrediction={recordPrediction}
+              />
             )}
           </main>
+          
+          <div className="back-home-container">
+            <button
+              type="button"
+              className="back-home"
+              onClick={() => setTab('home')}
+            >
+              <i className="fa-solid fa-arrow-left" aria-hidden="true" />
+              <span>Back to Homepage</span>
+            </button>
+          </div>
 
           <footer className="footer">
             <p>&copy; 2026 SpamChameleon</p>

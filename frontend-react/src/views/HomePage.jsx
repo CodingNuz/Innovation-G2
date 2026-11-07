@@ -76,7 +76,7 @@ function ModelCard({ model, onSelect }) {
  * @param {(modelId: 'spam'|'malware'|'assistant'|'process') => void} [onSelectModel]
  * @param {() => void} [onAboutClick]
  */
-export default function HomePage({ onSelectModel, onAboutClick }) {
+export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }) {
   return (
     <div className="hp">
       {/* Animated GIF background, kept behind everything */}
@@ -140,7 +140,16 @@ export default function HomePage({ onSelectModel, onAboutClick }) {
               <ModelCard key={m.id} model={m} onSelect={onSelectModel} />
             ))}
           </div>
+          <button
+            type="button"
+            className="hp-history"
+            onClick={onHistoryClick}
+          >
+            <i className="fa-solid fa-clock-rotate-left" aria-hidden="true" />
+            <span>history</span>
+          </button>
         </section>
+        
       </main>
 
       <footer className="hp-footer">
