@@ -145,8 +145,8 @@ button:focus-visible {
 }
 
 .aboutus {
-  width: 151px;
-  height: 48px;
+  width: 131px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,7 +154,7 @@ button:focus-visible {
   font-size: 19px;
 }
 .aboutus i {
-  font-size: 32px;
+  font-size: inherit;
 }
 
 /* tabs */
