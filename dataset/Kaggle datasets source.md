@@ -44,3 +44,48 @@ details.
 | `rtatman/the-national-university-of-singapore-sms-corpus` | no label column, so the rows cannot be trained or scored |
 | `nsaravana/malware-detection` used for classification | each of the 100 processes is repeated 1000 times and every snapshot of a process carries the same label, so a classifier would identify the process. The file is used for regression instead. |
 | `saurabhshahane/android-permission-dataset` | 1,927 package IDs appear with both labels, so the rows are genuinely ambiguous |
+
+## Malware platform expansion (all sources are Kaggle)
+
+Every source below feeds only the malware side. Each folder has an `INFO.md`
+with the exact download command, licence, label column and any reproducible
+sampling that was applied.
+
+| folder | Kaggle dataset | OS / case |
+| --- | --- | --- |
+| `greenwarbler` | `greenwarbler/malware-benignpe-files` | Windows PE |
+| `saurabhshahane` | `saurabhshahane/classification-of-malwares` | Windows PE (CLaMP) |
+| `luccagodoy` | `luccagodoy/obfuscated-malware-memory-2022-cic` | Windows memory |
+| `ang3loliveira` | `ang3loliveira/malware-analysis-datasets-api-call-sequences` | Windows dynamic API |
+| `bishwajitprasadgond` | `bishwajitprasadgond/malware-benign-api-call-argument-feature-vector` | Windows API arguments |
+| `oriolakolawole` | `oriolakolawole/ransomware-and-goodware-pe-header` | Windows ransomware |
+| `jeffborschowa` | `jeffborschowa/malwarebazaar-threat-intelligence-csv` | macOS / Office / scripts / ELF / cross-OS classifier |
+| `krishna1502` | `krishna1502/pegasus-spyware-attacksynthetic-dataset` | iOS / Apple mobile |
+| `sanjayrohith` | `sanjayrohith/elf-firmware-static-summary-features` | Linux ELF |
+| `datamunge` | `datamunge/iot-firmware-image-classification` | embedded firmware |
+| `ahmadzulfiqar001` | `ahmadzulfiqar001/iot-malware-dataset` | Linux / Embedded Linux / FreeRTOS / OpenWRT |
+| `gundalaxmisai` | `gundalaxmisai/iot-23-malware-typescombined-dataset` | IoT network |
+| `nkongolo` | `nkongolo/ugransome-dataset` | network attacks |
+| `shashwatwork` | `shashwatwork/android-malware-dataset-for-machine-learning` | Android Drebin |
+| `dannyrevaldo` | `dannyrevaldo/android-malware-detection-dataset` | Android permissions |
+| `satyaprakash138` | `satyaprakash138/cleaned-cic-pdf-malware-2022-dataset` | PDF documents |
+| `kk0105` | `kk0105/cicpdfmal2022` | PDF documents |
+| `dooschoi` | `dooschoi/malpdf-efs-malicious-pdf-enhanced-feature-set` | PDF documents |
+| `fouadtrad2` | `fouadtrad2/evasive-pdf-samples` | PDF documents |
+| `fanbyprinciple` | `fanbyprinciple/obfuscated-javascript-dataset` | JavaScript |
+| `thedevastator` | `thedevastator/assembly-shellcode-dataset` | shellcode |
+| `xwolf12` | `xwolf12/malicious-and-benign-websites` | websites |
+| `ndarvind` | `ndarvind/phiusiil-phishing-url-dataset` | URL features |
+| `sahandnamvar` | `sahandnamvar/phishing-url-detection-111k-urls-22-features` | URL features |
+| `victusadi` | `victusadi/phishing-urls-dataset-with-extracted-features` | URL features |
+| `sid321axn` | `sid321axn/malicious-urls-dataset` | URL text / defacement |
+| `beaaaaaan` | `beaaaaaan/programmatically-generated-security-logs-v1` | cloud logs |
+
+## Layered scanner reuse
+
+The `malware_engine` specialists reuse the Kaggle tables already listed above
+(PE header sets, the CIC / evasive PDF sets and the three Android sets). No new
+dataset was downloaded for the scanner: the EMBER 2018 v2 parquet files and
+the cleanware-ember set were deliberately excluded, and the engine's
+machine-local `local_index` and `github` corpora were not ported. Everything
+the scan path trains on has a `kaggle.com/datasets` reference.

@@ -25,6 +25,28 @@ dataset/spam_train_dataset.csv
 # Hugging Face.
 dataset/spam_train_clean.csv
 
+# The 87 MB embedded-firmware image table exceeds GitHub's 50 MB warning.
+# It is reproducible from the Kaggle command in dataset/datamunge/INFO.md.
+dataset/datamunge/firmware/firmware.csv
+
+# ---------------------------------------------------------------------------
+# Malware platform expansion: raw Kaggle downloads and the normalized training
+# tables built from them. These total ~560 MB and some Kaggle licences do not
+# allow redistributing the source files on a public repository.
+#
+# Every folder's INFO.md records the exact `kaggle datasets download -d <ref>`
+# command, and `python spam_malware_detection_model/build_datasets.py` rebuilds
+# every normalized CSV below. That keeps the repository small and reproducible.
+# ---------------------------------------------------------------------------
+dataset/**/*.csv
+dataset/*.csv
+dataset/**/*.ipynb
+dataset/fanbyprinciple/
+dataset/datamunge/imagery/
+# Keep provenance notes: only the bulk payload files are ignored.
+!dataset/**/INFO.md
+!dataset/joebeachcapital/malware_android_tuandromd.csv
+
 # Python environment and build artifacts
 .venv*/
 __pycache__/

@@ -40,6 +40,11 @@ IMAGE_MAGIC = (
     (b"BM", "image/bmp", "bmp"),
 )
 
+
+def is_image(data):
+    """True when the first bytes name one of the picture formats above."""
+    return any(data.startswith(magic) for magic, _mime, _ext in IMAGE_MAGIC)
+
 # The vision endpoint wants a data URL. Big photos get downscaled first to
 # keep the request small.
 MAX_IMAGE_SIDE = 1600

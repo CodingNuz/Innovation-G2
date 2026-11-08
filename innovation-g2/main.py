@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "spam_malware_detection_model"))
 import predict  # noqa: E402
 import agent  # noqa: E402
 import attachments  # noqa: E402
+import malware_scan  # noqa: E402
 
 # Upload cap. Real APKs run to tens of MB; anything bigger is rejected
 # before parsing.
@@ -125,7 +126,13 @@ def health():
 @app.get("/api/model")
 def model_card():
     """What the saved bundle contains, so a caller knows what to send."""
-    return predict.model_info()
+    return {**predict.model_info(), "malware_engine": malware_scan.info()}
+
+
+@app.get("/api/malware/coverage")
+def malware_coverage():
+    """The layered scanner's measured coverage per file format."""
+    return malware_scan.coverage()
 
 
 @app.get("/api/agent/info")
@@ -243,16 +250,39 @@ def scan_upload(files: List[UploadFile] = File(...),
                           "error": "larger than %d MB" % (MAX_UPLOAD_BYTES >> 20)})
             continue
         try:
-            attachment = attachments.inspect(data, name, platform)
-            if attachment.kind == "image":
+            if attachments.is_image(data):
                 raise ValueError(
                     "%s is a picture; attach it in the Assistant tab, which reads "
                     "the text from it and scores that text as a message" % name)
-            if platform and attachment.scan is None:
-                raise ValueError("platform only applies to a Windows PE or an "
-                                 "Android APK, and %s is a %s file"
-                                 % (name, attachment.kind))
-            # inspect() already ran the malware scan with the chosen platform.
+            reply.append(malware_scan.scan(data, name))
+        except malware_scan.MalwareBundleMissing as error:
+            raise HTTPException(503, "the malware models are not trained yet (%s)" % error)
+        except (attachments.UnsupportedFile, ValueError) as error:
+            reply.append({"filename": name, "error": str(error)})
+    return {"files": reply}
+
+
+@app.post("/api/spam/upload")
+def spam_upload(files: List[UploadFile] = File(...)):
+    """The original text-extraction path: PDF/email/HTML text scored by the spam model.
+
+    Kept separate from /api/scan/upload, which now answers with the malware
+    engine's four-verdict reply.
+    """
+    if not files:
+        raise HTTPException(400, "no files were uploaded")
+    reply = []
+    for file in files:
+        data = file.file.read(MAX_UPLOAD_BYTES + 1)
+        name = file.filename or "unnamed"
+        if len(data) > MAX_UPLOAD_BYTES:
+            reply.append({"filename": name,
+                          "error": "larger than %d MB" % (MAX_UPLOAD_BYTES >> 20)})
+            continue
+        try:
+            attachment = attachments.inspect(data, name)
+            if attachment.kind == "image":
+                raise ValueError("%s is a picture; use the Assistant tab" % name)
             reply.append(attachments.scan(attachment))
         except (attachments.UnsupportedFile, ValueError) as error:
             reply.append({"filename": name, "error": str(error)})

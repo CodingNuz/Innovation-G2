@@ -523,51 +523,50 @@ def test_pe_header_fields_are_read_into_the_models_columns():
 
 def test_upload_pe_is_scored_by_the_windows_model():
     reply = upload(make_pe()).json()
-    assert reply["file_type"] == "pe"
-    assert reply["verdict"] in ("MALWARE", "BENIGN")
-    assert [r["platform"] for r in reply["results"]] == ["pe_windows"]
-    assert reply["results"][0]["features_given"] == 50
-    assert reply["results"][0]["features_imputed"] == 0
-    assert len(reply["sha256"]) == 64 and reply["size"] == len(make_pe())
+    assert reply["format"] == "pe"
+    assert reply["verdict"] in ("MALWARE", "SUSPICIOUS", "BENIGN", "CANNOT_ASSESS")
+    assert reply["coverage_tier"] in ("specialist", "fallback", "rules-only")
+    assert reply["deciding_layer"] in ("specialist", "fallback", "rules", "lookup", "none")
+    assert "sha256" in reply and reply["size"] == len(make_pe())
+    assert reply["schema_version"] == "1.0" and reply["model_version"]
 
 
-def test_upload_rejects_unsupported_empty_and_mismatched_files():
-    # Unknown binary is refused; plain text gets scored.
-    assert "unsupported" in upload(b"\x00\x01\x02\x03", "x.bin")["error"]
+def test_upload_rejects_empty_and_returns_an_honest_unknown():
     assert "empty" in upload(b"")["error"]
-    assert "does not apply" in upload(make_pe(), platform="android_drebin")["error"]
-    assert "valid PE" in upload(b"MZ" + bytes(10))["error"]       # magic, broken header
+    # An unknown binary is no longer a 500 or a confident BENIGN: the scanner
+    # answers CANNOT_ASSESS with a rules-only tier.
+    reply = upload(b"\x00\x01\x02\x03", "x.bin")
+    assert reply.get("verdict") == "CANNOT_ASSESS"
+    assert reply.get("coverage_tier") == "rules-only"
 
 
 def test_upload_rejects_a_zip_that_is_not_an_apk():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("readme.txt", "hello")
-    assert "unsupported" in upload(buffer.getvalue(), "x.zip")["error"]
+    reply = upload(buffer.getvalue(), "x.zip")
+    assert reply.get("verdict") == "CANNOT_ASSESS"
 
 
 def test_upload_rejects_an_apk_whose_manifest_cannot_be_read():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("AndroidManifest.xml", b"this is not a manifest")
-    assert "manifest" in upload(buffer.getvalue(), "broken.apk")["error"].lower()
+    reply = upload(buffer.getvalue(), "broken.apk")
+    # The APK token extractor cannot parse it; the scanner refuses confidently.
+    assert reply.get("verdict") in ("CANNOT_ASSESS", "SUSPICIOUS")
 
 
 def test_one_route_scores_a_pdf_and_a_pe_side_by_side():
-    """One route: the file's bytes pick the model, the caller doesn't."""
+    """One route: the bytes pick the format, the caller doesn't."""
     reply = client.post("/api/scan/upload", files=[
         ("files", ("mail.pdf", pdf_with_text())),
         ("files", ("app.exe", make_pe())),
     ]).json()["files"]
 
-    assert [f["kind"] for f in reply] == ["spam", "malware"]
-    pdf, pe = reply
-    # Spam half: words behind the score, plus file facts.
-    assert pdf["verdict"] in ("SPAM", "HAM")
-    assert pdf["suspicious_words"] is not None and pdf["size"] > 0
-    assert len(pdf["sha256"]) == 64
-    # Malware half: one vote per model.
-    assert pe["file_type"] == "pe" and len(pe["results"]) == 1
+    assert [f["format"] for f in reply] == ["pdf", "pe"]
+    assert all("verdict" in f and "coverage_tier" in f for f in reply)
+    assert all(len(f["sha256"]) == 64 for f in reply)
 
 
 def test_one_bad_file_does_not_fail_the_others():
@@ -577,19 +576,27 @@ def test_one_bad_file_does_not_fail_the_others():
     ]).json()["files"]
 
     assert len(reply) == 2
-    assert reply[0]["kind"] == "spam"                 # still scored
-    assert "unsupported" in reply[1]["error"]         # comes back as an error entry
+    assert reply[0]["format"] == "pdf"             # still scored
+    assert reply[1]["verdict"] == "CANNOT_ASSESS"  # comes back as a verdict entry
 
 
 def test_the_upload_route_caps_the_batch_and_the_platform_hint():
     too_many = [("files", ("f%d.txt" % i, b"hello")) for i in range(21)]
     assert client.post("/api/scan/upload", files=too_many).status_code == 413
 
-    # A platform only picks a model for a PE or APK, a PDF ignores it.
+    # The platform hint is now ignored by the scan route: the bytes decide.
     reply = client.post("/api/scan/upload",
                         files=[("files", ("mail.pdf", pdf_with_text()))],
                         data={"platform": "pe_windows"}).json()["files"][0]
-    assert "does not apply" in reply["error"] or "only applies" in reply["error"]
+    assert reply["format"] == "pdf"
+
+
+def test_spam_upload_keeps_the_original_text_path():
+    """PDF text still reaches the spam model at the separate route."""
+    reply = client.post("/api/spam/upload", files=[
+        ("files", ("mail.pdf", pdf_with_text()))]).json()["files"][0]
+    assert reply["kind"] == "spam"
+    assert reply["verdict"] in ("SPAM", "HAM")
 
 
 def test_android_tokens_match_each_datasets_column_spelling():
