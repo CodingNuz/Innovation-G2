@@ -44,11 +44,11 @@ export default function UploadScan({ onPrediction }) {
         model: 'malware',
         verdict: reply.verdict,
         probability: reply.probability,
-        platform: reply.file_type === 'pe' ? 'Windows' : 'Android',
+        platform: reply.file_type === 'pe' ? 'Windows' : 'Android', 
         inputType: 'File upload',
         inputSummary: `${reply.filename} (${reply.file_type === 'pe' ? 'Windows PE' : 'Android APK'}, ${formatSize(reply.size)})`,
         sha256: reply.sha256,
-        modelCount: reply.results?.length ?? 0,
+        modelCount: reply.details?.length ?? 0,
       })
     } catch (apiError) {
       setResult(null)
@@ -98,7 +98,7 @@ export default function UploadScan({ onPrediction }) {
             {result.filename} &middot;{' '}
             {isSpamResult
               ? 'PDF or text'
-              : result.file_type === 'pe'
+              : result.format === 'pe'
                 ? 'Windows PE'
                 : 'Android APK'}{' '}
             &middot; {formatSize(result.size)} &middot; sha256 {result.sha256.slice(0, 12)}...
@@ -110,9 +110,9 @@ export default function UploadScan({ onPrediction }) {
             </p>
           ) : (
             <ul className="uploadmodels">
-              {result.results.map((model) => (
-                <li key={model.platform}>
-                  <span>{MODEL_LABELS[model.platform] ?? model.platform}</span>
+              {(result.details ?? []).map((model) => (
+                <li key={model.model}>
+                  <span>{MODEL_LABELS[model.model] ?? model.model}</span>
                   <span className="uploadbar" aria-hidden="true">
                     <span
                       style={{
@@ -129,13 +129,6 @@ export default function UploadScan({ onPrediction }) {
               ))}
             </ul>
           )}
-          {result.file_type === 'pe' ? (
-            <p className="uploadhint">
-              Read from the PE headers: {result.results[0].features_given} of 50 fields. A 64-bit or
-              unusual build can score high even when it is clean, because the model learned from mostly
-              32-bit files.
-            </p>
-          ) : null}
         </div>
       ) : null}
     </div>
