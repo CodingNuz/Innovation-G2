@@ -152,7 +152,7 @@ def test_the_picture_rules_ask_for_text_then_the_spam_model(monkeypatch):
                attachment=attachments.inspect(make_png(), "shot.png"))
     system = sent[-1]["messages"][0]["content"]
     assert "turn the picture into a message" in system
-    assert "call scan_attachment" in system
+    assert "call `scan_attachment`" in system
     assert "not evidence of malware" in system
 
 
@@ -231,9 +231,11 @@ def test_inspect_text_email_and_html():
 
 
 def test_inspect_rejects_empty_unsupported_and_encrypted():
-    for data in (b"", b"\x00\x01 binary"):
-        with pytest.raises(attachments.UnsupportedFile):
-            attachments.inspect(data, "x.bin")
+    with pytest.raises(attachments.UnsupportedFile):
+        attachments.inspect(b"", "x.bin")
+    # Binary files now become attachments so the assistant can route them
+    # through scan_uploaded_file instead of being rejected at upload time.
+    assert attachments.inspect(b"\x00\x01 binary", "x.bin").kind == "binary"
 
     doc = pymupdf.open()
     doc.new_page().insert_text((72, 72), "secret")
@@ -310,8 +312,9 @@ def test_scan_attachment_text_is_optional_for_other_files():
 
 
 def test_the_picture_prompt_asks_for_the_text_argument():
-    assert "pass that text in the text argument" in agent.IMAGE_PROMPT
-    assert "you are the only reader" in agent.IMAGE_PROMPT
+    assert "pass that text in the" in agent.IMAGE_PROMPT
+    assert "`text` argument" in agent.IMAGE_PROMPT
+    assert "only reader" in agent.IMAGE_PROMPT
     attachment = attachments.inspect(
         b"WIN a FREE prize now, click the link to claim your reward", "m.txt")
     reply = agent.run_tool("scan_attachment", {}, attachment)
@@ -384,7 +387,10 @@ def test_chat_route_rejects_a_bad_attachment():
 
     body["attachment"] = {"filename": "a.bin",
                           "content_b64": base64.b64encode(b"\x00\x01").decode()}
-    assert post("chat", body).status_code == 415
+    # Binary uploads are no longer a 415: the layered scanner answers
+    # CANNOT_ASSESS for them. The LLM server is unconfigured in this test, so
+    # the chat itself reports 503.
+    assert post("chat", body).status_code == 503
 
 
 def test_chat_route_accepts_a_pdf_attachment(monkeypatch):
@@ -618,9 +624,9 @@ def test_android_tokens_match_each_datasets_column_spelling():
         tokens, ["Ljava/lang/Runtime;->exec", "SEND_SMS", "BIND_goodwareTIFICATION_LISTENER_SERVICE"],
         "android_tuandromd")
     assert tuandromd["Ljava/lang/Runtime;->exec"] == 1.0 and tuandromd["SEND_SMS"] == 1.0
-    assert extract._lookup_key("BIND_goodwareTIFICATION_LISTENER_SERVICE",
+    assert extract.lookup_key("BIND_goodwareTIFICATION_LISTENER_SERVICE",
                                "android_tuandromd") == "BIND_NOTIFICATION_LISTENER_SERVICE"
-    assert extract._lookup_key("Landroid/location/LocationManager;->getLastKgoodwarewnLocation",
+    assert extract.lookup_key("Landroid/location/LocationManager;->getLastKgoodwarewnLocation",
                                "android_tuandromd").endswith("getLastKnownLocation")
 
     permissions = extract.android_features(
@@ -667,6 +673,8 @@ def text_reply(text):
 def test_tool_specs_are_valid_openai_functions():
     assert agent.TOOL_NAMES == ["check_spam", "list_malware_platforms",
                                 "check_malware", "predict_process", "get_model_info"]
+    assert "scan_uploaded_file" in agent.ATTACHMENT_TOOL_NAMES
+    assert "AGENT_INSTRUCTIONS.md" in str(agent.INSTRUCTIONS_FILE)
     for spec in agent.TOOL_SPECS:
         assert spec["type"] == "function"
         function = spec["function"]
@@ -1026,3 +1034,70 @@ def test_the_fallback_reports_the_verdict_from_the_tool(monkeypatch):
     reply = agent.chat("is this spam?", client=fake_client(handler))
     assert reply["reply"].startswith("Verdict: SPAM")
     assert "probability" in reply["reply"]
+
+
+# ---- agent: markdown instructions and platform-aware tools ------------------
+def test_agent_instructions_come_from_a_markdown_file():
+    assert agent.INSTRUCTIONS_FILE.name == "AGENT_INSTRUCTIONS.md"
+    assert agent.INSTRUCTIONS_FILE.exists()
+    assert "scan_uploaded_file" in agent.ATTACHMENT_PROMPT
+    assert "coverage_tier" in agent.ATTACHMENT_PROMPT
+    assert "list_malware_platforms" in agent.SYSTEM_PROMPT
+
+
+def test_list_malware_platforms_reports_the_feature_kind():
+    reply = agent.run_tool("list_malware_platforms", {})
+    kinds = reply["feature_kind"]
+    assert len(kinds) == len(reply["platforms"]) == 30
+    assert kinds["pe_windows"] == "numeric"
+    assert kinds["url_text"] == "text"
+    assert reply["sample_features"]["pe_windows"]
+    assert reply["sample_features"]["url_text"] == ["text"]
+
+
+def test_check_malware_accepts_a_text_platform():
+    reply = agent.run_tool("check_malware", {
+        "platform": "url_text",
+        "features": {"text": "http://login.example.com/verify"}})
+    assert reply["verdict"] in ("MALWARE", "BENIGN")
+    assert reply["platform"] == "url_text"
+
+
+def test_check_malware_names_the_valid_platform_list_on_a_bad_name():
+    reply = agent.run_tool("check_malware", {
+        "platform": "not_a_platform", "features": {}})
+    assert "list_malware_platforms" in reply["error"]
+
+
+def test_check_malware_schema_allows_string_feature_values():
+    spec = next(s for s in agent.TOOL_SPECS
+                if s["function"]["name"] == "check_malware")
+    allowed = spec["function"]["parameters"]["properties"]["features"][
+        "additionalProperties"]["type"]
+    assert "number" in allowed and "string" in allowed
+
+
+def test_scan_uploaded_file_routes_binary_formats_without_a_platform_hint():
+    for data, expected in [
+        (b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 200, "elf"),
+        (b"\xfe\xed\xfa\xce" + b"\x00" * 200, "macho"),
+        (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 100, "ole"),
+    ]:
+        attachment = attachments.inspect(data, "sample.bin")
+        reply = agent.run_tool("scan_uploaded_file", {}, attachment)
+        assert reply["format"] == expected, expected
+        assert reply["verdict"] in ("MALWARE", "SUSPICIOUS", "BENIGN",
+                                    "CANNOT_ASSESS")
+        assert reply["coverage_tier"] in ("specialist", "fallback", "rules-only")
+
+
+def test_get_attachment_reports_the_detected_scan_format():
+    attachment = attachments.inspect(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 200,
+                                     "bot")
+    reply = agent.run_tool("get_attachment", {}, attachment)
+    assert reply["scan_format"] == "elf"
+    assert reply["kind"] == "elf"
+
+
+def test_binary_attachments_are_no_longer_rejected():
+    assert attachments.inspect(b"\x00\x01 binary", "x.bin").kind == "binary"

@@ -56,6 +56,11 @@ __pycache__/
 # Local secrets: copy .env.example to .env and never commit the copy.
 .env
 
+# Local scratch files from debugging and review sessions.
+innovation-g2/_debug_*.py
+innovation-g2/_review_*.py
+render/
+
 # Editor / OS noise
 .DS_Store
 .vscode/

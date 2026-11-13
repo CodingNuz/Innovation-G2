@@ -1153,6 +1153,19 @@ textarea::placeholder {
   line-height: 1.4;
 }
 
+.resultnote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #5d5a7a;
+  background: rgba(255, 255, 255, 0.55);
+  border-left: 3px solid var(--ham-green);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .sus {
   margin: 22px 0 6px;
   font-weight: 700;

@@ -107,7 +107,12 @@ class Attachment:
 
 
 def detect_kind(data: bytes, filename: str = "") -> str:
-    """File type from the bytes; the name only matters for text (.eml, .html)."""
+    """File type from the bytes; the name only matters for text (.eml, .html).
+
+    Binary formats the layered malware engine can route (ELF, Mach-O, OLE,
+    OOXML, archives, scripts) are kept as attachments instead of being
+    rejected. The assistant reaches them through scan_uploaded_file.
+    """
     if not data:
         raise UnsupportedFile("the file is empty")
     if data[:5] == PDF_MAGIC or PDF_MAGIC in data[:1024]:
@@ -120,19 +125,43 @@ def detect_kind(data: bytes, filename: str = "") -> str:
     if zipfile.is_zipfile(io.BytesIO(data)):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                if "AndroidManifest.xml" in archive.namelist():
+                names = archive.namelist()
+                if "AndroidManifest.xml" in names:
                     return "apk"
+                if any(n.startswith("word/") or n.startswith("xl/")
+                       or n.startswith("ppt/") for n in names):
+                    return "ooxml"
+                return "archive"
         except zipfile.BadZipFile:
             pass
-    if b"\x00" in data[:8192]:
-        raise UnsupportedFile(
-            "unsupported file: expected a PDF, a Windows PE, an Android APK, "
-            "an image, or a text/email file")
+    # Ask the same router the scan engine uses, so a format is never rejected
+    # here and accepted there. It never executes the bytes.
+    try:
+        import sys
+        from pathlib import Path
+        folder = str(Path(__file__).resolve().parent.parent
+                     / "spam_malware_detection_model")
+        if folder not in sys.path:
+            sys.path.insert(0, folder)
+        from malware_engine import router
+        detected = router.detect_format(data)
+    except Exception:
+        detected = "unknown"
+    if detected in ("elf", "macho", "ipa", "ole", "ooxml", "archive"):
+        return detected
+    if detected == "pe" or detected == "pdf" or detected == "apk":
+        return detected
     lowered = (filename or "").lower()
     if lowered.endswith(".eml"):
         return "email"
     if lowered.endswith((".html", ".htm")):
         return "html"
+    # A real shell/JS/HTA script has no NUL bytes; the router calls it
+    # "script". HTML-like text still belongs to the text/HTML parsers.
+    if detected == "script" and b"\x00" not in data[:8192]:
+        return "text"
+    if b"\x00" in data[:8192]:
+        return "binary"
     return "text"
 
 
@@ -353,6 +382,9 @@ def inspect(data: bytes, filename: str = "", platform: str = None) -> Attachment
         return inspect_pdf(data, filename)
     if kind in ("pe", "apk"):
         return inspect_binary(data, kind, filename, platform)
+    if kind in ("elf", "macho", "ipa", "ole", "ooxml", "archive", "binary"):
+        return Attachment(filename, data, kind,
+                          notes=["binary file; use scan_uploaded_file to route it"])
     if kind == "image":
         return inspect_image(data, filename)
     if kind == "email":

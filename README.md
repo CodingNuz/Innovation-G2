@@ -156,7 +156,7 @@ spam text is run and scored by the training script and is not saved:
 | model | task | score (5-fold CV) | score on unseen data |
 | --- | --- | --- | --- |
 | spam | message text to ham/spam | F1 0.979 | F1 0.912 (unseen source) |
-| malware | file features to benign/malware, one model per platform | F1 0.886 to 0.992 | Windows files from a new source: F1 0.75 to 0.89; the platform is chosen by the caller |
+| malware | file features to benign/malware, one model per platform | F1 0.689 to 1.000 (per-platform CV F1) | Windows files from a new source: F1 0.71 to 0.89; the platform is chosen by the caller |
 | regression | process counters to context switches | R2 0.979 | MAE 742 against 6390 for the mean answer |
 
 Training code, data processing and instructions:
@@ -195,7 +195,7 @@ and in the `INFO.md` file inside each source folder.
   Android models and the majority vote is the verdict. Pass `platform=...` to
   score a PE/APK with one named model only. The file is parsed and never run.
   The models are unchanged, so they keep their limits: a clean 64-bit or unusual PE
-  can score as malware (the Windows model reaches F1 0.75 to 0.89 on files from a new
+  can score as malware (the Windows model reaches F1 0.71 to 0.89 on files from a new
   source), and only the features that the file itself provides are used.
   ```bash
   curl -F files=@sample.apk http://127.0.0.1:3000/api/scan/upload

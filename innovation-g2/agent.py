@@ -7,6 +7,7 @@ against the ML models, send the results back, repeat until the model answers.
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
@@ -37,63 +38,37 @@ MAX_REPLY_TOKENS = 1600
 # round is two completions, so 120 s was too tight.
 DEFAULT_TIMEOUT = 300.0
 
-SYSTEM_PROMPT = (
-    "You are the security assistant of a spam, malware and process detection "
-    "service.  The trained machine-learning models are only reachable through "
-    "the tools you are given.\n"
-    "Rules:\n"
-    "1. Never guess a verdict.  Call a tool first, then explain its result.\n"
-    "2. For a message, call check_spam.  For a file or app on a named platform, "
-    "call list_malware_platforms if you are unsure of the name, then "
-    "check_malware.  For system counters, call predict_process.\n"
-    "3. If a tool returns an error, read it and correct the arguments; do not "
-    "repeat the same failing call.\n"
-    "4. In the final answer, state the verdict and probability in one line, "
-    "then explain in plain language what pushed the score (for spam, the "
-    "suspicious and safe words; for malware, how many features were real sample "
-    "values versus training medians; for process, whether the answer was "
-    "clipped to the training range).\n"
-    "5. Answer in the language the user wrote in.  Keep the explanation to a "
-    "short paragraph unless the user asks for detail."
-)
+# The instructions live in AGENT_INSTRUCTIONS.md so they can be edited
+# without touching Python. The loader splits on `<!-- key: ... -->` markers.
+INSTRUCTIONS_FILE = Path(__file__).with_name("AGENT_INSTRUCTIONS.md")
 
-# Appended only when a file is attached, so plain questions don't carry
-# rules for tools that aren't there.
-ATTACHMENT_PROMPT = (
-    "\nA file is attached to this turn and its contents are NOT in this "
-    "prompt.  Rules for it:\n"
-    "6. The user message already names the file and its type.  Never guess "
-    "what a file contains; call get_attachment only if you need the hash, "
-    "links or notes.\n"
-    "7. For a PDF, email or text file, call read_attachment_text, then "
-    "scan_attachment for the spam verdict.  A long document needs more than "
-    "one read: pass the offset the previous reply returned.\n"
-    "8. For a Windows PE or Android APK, call scan_attachment; the file has "
-    "already been parsed by the malware models.\n"
-    "9. Report the verdict and probability exactly as the tool returned them, "
-    "and mention links, embedded files or active content when the notes list "
-    "them."
-)
 
-# A picture has no text layer: the assistant is its only reader, and hands
-# what it reads to the spam model.
-IMAGE_PROMPT = (
-    "\nThe attached file is a picture, and you can see it directly.  Your job "
-    "on this turn is to turn the picture into a message and then have the "
-    "trained spam model judge it.  Rules:\n"
-    "10. Read the visible text out of the picture and write it out, keeping the "
-    "sender, subject, body, amounts and links as they appear.  Say plainly "
-    "when something is not legible instead of guessing it.\n"
-    "11. Then call scan_attachment and pass that text in the text argument, "
-    "copied exactly as you read it.  The tool scores what you pass with the "
-    "same spam model the Spam tab uses.  Never call it with empty text: you "
-    "are the only reader, so without your copy there is nothing to score.\n"
-    "12. Report that verdict and its probability as the answer, and say which "
-    "words pushed the score.  If you truly cannot read any text, say that "
-    "instead of inventing a verdict.\n"
-    "13. A picture by itself is not evidence of malware.  Judge only the text "
-    "you read out of it."
-)
+def _load_instructions(path=INSTRUCTIONS_FILE):
+    """Read the three prompt sections from the markdown file.
+
+    A missing file or marker is a deployment error: fail loudly at import time
+    rather than silently sending an empty system prompt to the LLM.
+    """
+    text = path.read_text(encoding="utf-8")
+    blocks = re.split(r"<!--\s*key:\s*([a-z]+)\s*-->", text)
+    sections = {}
+    for i in range(1, len(blocks) - 1, 2):
+        key, body = blocks[i].strip(), blocks[i + 1]
+        # Drop the markdown heading; keep the numbered rules.
+        lines = [line for line in body.strip().splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+        sections[key] = "\n".join(line.strip() for line in lines)
+    missing = {"system", "attachment", "image"} - set(sections)
+    if missing:
+        raise RuntimeError("AGENT_INSTRUCTIONS.md is missing sections: %s"
+                           % ", ".join(sorted(missing)))
+    return sections
+
+
+_INSTRUCTIONS = _load_instructions()
+SYSTEM_PROMPT = _INSTRUCTIONS["system"]
+ATTACHMENT_PROMPT = "\n" + _INSTRUCTIONS["attachment"]
+IMAGE_PROMPT = "\n" + _INSTRUCTIONS["image"]
 
 
 def _tool(name: str, description: str, properties: Dict[str, Any],
@@ -132,15 +107,18 @@ TOOL_SPECS = [
     ),
     _tool(
         "check_malware",
-        "Classify a file as MALWARE or BENIGN for one platform, from feature "
-        "values.  Missing features are filled with the training median and the "
-        "reply says how many were imputed.",
+        "Classify a file as MALWARE or BENIGN for one named platform. "
+        "Numeric platforms take feature column name -> number; text platforms "
+        "take a single {'text': '...'} value. Call list_malware_platforms first "
+        "to see which kind a platform needs. For an uploaded file, prefer "
+        "scan_uploaded_file, which chooses the format automatically.",
         {
             "platform": {"type": "string",
                          "description": "A name from list_malware_platforms."},
             "features": {"type": "object",
-                         "description": "Feature column name -> number.",
-                         "additionalProperties": {"type": "number"}},
+                         "description": "Numeric columns -> numbers, or "
+                                        "{'text': '...'} for a text platform.",
+                         "additionalProperties": {"type": ["number", "string"]}},
         },
         ["platform", "features"],
     ),
@@ -165,6 +143,17 @@ TOOL_NAMES = [spec["function"]["name"] for spec in TOOL_SPECS]
 
 
 ATTACHMENT_TOOL_SPECS = [
+    _tool(
+        "scan_uploaded_file",
+        "Scan the attached file's raw bytes with the layered malware engine. "
+        "It detects the format itself (PE, ELF, Mach-O, APK, PDF, Office, "
+        "script, archive or unknown), picks the right model and returns one of "
+        "four verdicts plus format, coverage_tier, deciding_layer and evidence. "
+        "Call this first for any malware question about an attached file; do "
+        "not guess the platform from the filename.",
+        {},
+        [],
+    ),
     _tool(
         "get_attachment",
         "Describe the attached file: name, size, sha256, type, page count, "
@@ -286,8 +275,18 @@ def run_tool(name: str, args: Dict[str, Any],
             if attachment is None:
                 return {"error": "no file is attached to this question; ask the "
                                  "user to attach one, or use the text tools"}
+            if name == "scan_uploaded_file":
+                return predict.predict_scan(attachment.data, attachment.filename)
             if name == "get_attachment":
-                return attachment.summary()
+                reply = attachment.summary()
+                # Tell the model what the byte-level router decided, so it does
+                # not have to infer the platform from a filename.
+                try:
+                    from malware_engine import router
+                    reply["scan_format"] = router.detect_format(attachment.data)
+                except Exception:
+                    reply["scan_format"] = "unknown"
+                return reply
             if name == "read_attachment_text":
                 return _read_attachment_text(attachment, args)
             return _scan_with_reading(attachment, args.get("text"))
@@ -299,15 +298,37 @@ def run_tool(name: str, args: Dict[str, Any],
             return predict.predict_spam(text)
 
         if name == "list_malware_platforms":
-            return {"platforms": predict.malware_platforms(),
-                    "features": {p: len(predict.malware_feature_names(p))
-                                 for p in predict.malware_platforms()}}
+            names = predict.malware_platforms()
+            kinds, samples = {}, {}
+            for platform in names:
+                model = predict._platform_model(platform)
+                kinds[platform] = model.get("feature_kind", "numeric")
+                cols = model.get("feature_names") or []
+                samples[platform] = cols[:6] if cols else ["text"]
+            return {"platforms": names,
+                    "features": {p: len(predict.malware_feature_names(p)) for p in names},
+                    "feature_kind": kinds,
+                    "sample_features": samples,
+                    "note": "text platforms take {'text': '...'}; numeric "
+                            "platforms take column name -> number. Use "
+                            "scan_uploaded_file for raw uploaded files."}
 
         if name == "check_malware":
             platform = args.get("platform")
             if not isinstance(platform, str) or not platform:
                 return {"error": "platform must be a name from list_malware_platforms"}
-            return predict.predict_malware(platform, _numbers(args.get("features", {})))
+            if platform not in predict.malware_platforms():
+                return {"error": "unknown platform %r; call list_malware_platforms "
+                                 "for the valid names" % platform}
+            features = args.get("features", {})
+            if not isinstance(features, dict):
+                return {"error": "features must be an object"}
+            model = predict._platform_model(platform)
+            if model.get("feature_kind") == "text":
+                # A text platform needs the string; stripping it would leave
+                # nothing for TF-IDF to score.
+                return predict.predict_malware(platform, features)
+            return predict.predict_malware(platform, _numbers(features))
 
         if name == "predict_process":
             return predict.predict_process(_numbers(args.get("features", {})))
