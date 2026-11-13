@@ -59,14 +59,13 @@ sampling that was applied.
 | `ang3loliveira` | `ang3loliveira/malware-analysis-datasets-api-call-sequences` | Windows dynamic API |
 | `bishwajitprasadgond` | `bishwajitprasadgond/malware-benign-api-call-argument-feature-vector` | Windows API arguments |
 | `oriolakolawole` | `oriolakolawole/ransomware-and-goodware-pe-header` | Windows ransomware |
-| `jeffborschowa` | `jeffborschowa/malwarebazaar-threat-intelligence-csv` | macOS / Office / scripts / ELF / cross-OS classifier |
+| `jeffborschowa` | `jeffborschowa/malwarebazaar-threat-intelligence-csv` | cross-OS file-type classifier |
 | `krishna1502` | `krishna1502/pegasus-spyware-attacksynthetic-dataset` | iOS / Apple mobile |
 | `sanjayrohith` | `sanjayrohith/elf-firmware-static-summary-features` | Linux ELF |
 | `datamunge` | `datamunge/iot-firmware-image-classification` | embedded firmware |
 | `ahmadzulfiqar001` | `ahmadzulfiqar001/iot-malware-dataset` | Linux / Embedded Linux / FreeRTOS / OpenWRT |
 | `gundalaxmisai` | `gundalaxmisai/iot-23-malware-typescombined-dataset` | IoT network |
 | `nkongolo` | `nkongolo/ugransome-dataset` | network attacks |
-| `shashwatwork` | `shashwatwork/android-malware-dataset-for-machine-learning` | Android Drebin |
 | `dannyrevaldo` | `dannyrevaldo/android-malware-detection-dataset` | Android permissions |
 | `satyaprakash138` | `satyaprakash138/cleaned-cic-pdf-malware-2022-dataset` | PDF documents |
 | `kk0105` | `kk0105/cicpdfmal2022` | PDF documents |
@@ -77,9 +76,7 @@ sampling that was applied.
 | `xwolf12` | `xwolf12/malicious-and-benign-websites` | websites |
 | `ndarvind` | `ndarvind/phiusiil-phishing-url-dataset` | URL features |
 | `sahandnamvar` | `sahandnamvar/phishing-url-detection-111k-urls-22-features` | URL features |
-| `victusadi` | `victusadi/phishing-urls-dataset-with-extracted-features` | URL features |
 | `sid321axn` | `sid321axn/malicious-urls-dataset` | URL text / defacement |
-| `beaaaaaan` | `beaaaaaan/programmatically-generated-security-logs-v1` | cloud logs |
 
 ## Layered scanner reuse
 

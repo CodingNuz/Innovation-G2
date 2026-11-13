@@ -22,6 +22,15 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# The Assistant (chat) tab reads LLM_BASE_URL / LLM_MODEL / LLM_API_KEY from
+# the environment. A .env file in the repository root keeps those settings
+# out of the shell history; the copy is never committed.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:  # python-dotenv is optional
+    pass
+
 # Serves the built React app from frontend-react/ (run npm run build there
 # first), so the whole thing runs from this one server.
 FRONTEND = ROOT / "frontend-react" / "dist"

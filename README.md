@@ -183,8 +183,10 @@ and in the `INFO.md` file inside each source folder.
 ## Notes
 
 - Both text models are trained on English SMS and email. Neither handles other
-  languages. SMS is the weakest part (F1 0.745 to 0.785 on an unseen SMS source,
-  and about 0.38 precision on ordinary SMS where 9% of messages are spam).
+  languages. SMS is the weakest part: on an unseen SMS source the F1 is 0.816
+  (`sms_master`) and 0.803 (`sms_smishing_kaggle`), against 0.956 to 0.984 for
+  the email sources. On ordinary SMS, where 9.5% of the messages are spam, the
+  precision is 0.572, so about half of the flagged messages are not spam.
 - Each malware model only understands its own platform's feature columns.
 - **Scanning a file.** `POST /api/scan/upload` (also the "Scan a file" box on the
   malware screen) takes one or more files in a `files` field: a Windows `.exe`/`.dll`,
