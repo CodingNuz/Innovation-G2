@@ -2,19 +2,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,700;1,400&family=Sedgwick+Ave&display=swap');
 
 .hp {
-  --hp-ink: #1a1a1f;
-  --hp-panel: rgba(186, 232, 232, 0.38); /* #bae8e8 @ 38% */
-  --hp-card: #e3f6f5;
-  --hp-yellow: #ffd803;
-
   position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 0 clamp(16px, 4vw, 56px);
-  font-family: 'Noto Sans', sans-serif;
-  color: var(--hp-ink);
+  font: var(--t-body);
+  color: var(--ink);
   overflow-x: hidden;
 }
 
@@ -29,7 +23,7 @@
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-color: #0b1b2b;
+  background-color: var(--surface);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover; /* keeps aspect ratio, no stretching */
@@ -39,7 +33,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(228, 232, 235, 0.82); /* tweak alpha to taste */
+  background: rgba(245, 245, 247, 0.82);
 }
 
 /* ---------- Header ---------- */
@@ -47,94 +41,97 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--page-margin);
 }
 
 .hp-logo {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: #2a2a4a;
+  gap: var(--s-2);
+  color: var(--ink);
   text-decoration: none;
 }
 
 .hp-logo-text {
-  font-family: 'Sedgwick Ave', cursive;
-  font-size: 38px;
+  font: var(--t-large);
+  font-family: var(--font-brand);
+  font-weight: 400;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .hp-logo-icon {
-  font-size: 28px;
+  font-size: var(--s-6);
   width: auto;
   height: auto;
 }
 
+/* Secondary button recipe. The home page has no primary action. */
 .hp-about {
-  width: 131px;
-  height: 40px;
+  min-height: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--hp-yellow);
-  color: var(--hp-ink);
-  font: 700 19px 'Lato', sans-serif;
+  gap: var(--s-2);
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-headline);
+  white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  transition: filter 0.2s ease;
+  transition: background-color 0.18s ease;
 }
 
 .hp-about:hover {
-  filter: brightness(0.96);
+  background: var(--surface-card-hover);
+}
+
+.hp-about-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--ink-2);
+}
+
+.hp-about i,
+.hp-about-icon {
+  color: var(--ink-2);
+  font-size: var(--s-4);
 }
 
 .hp-about:focus-visible,
 .hp-card:focus-visible,
-.hp-email:focus-visible {
-  outline: 3px solid var(--hp-ink);
-  outline-offset: 3px;
+.hp-email:focus-visible,
+.hp-history:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
-
-
 
 /* ---------- Main layout ---------- */
 .hp-main {
   flex: 1;
+  width: 100%;
+  max-width: var(--content-w-wide);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   align-items: center;
-  gap: clamp(24px, 5vw, 80px);
-  padding: 8px 0 24px;
+  gap: var(--s-10);
+  padding: var(--s-6) var(--page-margin) var(--s-8);
 }
 
-/* ---------- Intro (slides in from the left) ---------- */
+/* ---------- Intro (revealed by .reveal from App.css) ---------- */
 .hp-intro {
-  max-width: 380px;
-  margin-left: clamp(0px, 2.5vw, 24px);
-  animation: hp-slide-in 0.9s cubic-bezier(0.22, 0.8, 0.3, 1) both;
-}
-
-@keyframes hp-slide-in {
-  from {
-    opacity: 0;
-    transform: translateX(-60px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  max-width: 40ch;
 }
 
 .hp-welcome {
-  margin: 0 0 14px;
-  font-size: clamp(1.4rem, 2vw, 1.75rem);
-  font-weight: 700;
-  line-height: 1.3;
+  margin: 0 0 var(--s-4);
+  font: var(--t-title2);
+  letter-spacing: var(--tracking-title);
 }
 
 .hp-comma {
@@ -143,22 +140,22 @@
 
 .hp-lead {
   margin: 0;
-  font-size: clamp(1rem, 1.5vw, 1.25rem);
-  font-style: italic;
-  line-height: 1.65;
+  max-width: 40ch;
+  font: var(--t-callout);
+  color: var(--ink-2);
 }
 
 /* ---------- Model panel ---------- */
 .hp-models {
   position: relative;
   width: 100%;
-  max-width: 700px;
+  display: flex;
+  flex-direction: column;
   justify-self: end;
 }
 
 .hp-models-group {
   width: 100%;
-  max-width: 700px;
   justify-self: end;
 }
 
@@ -166,66 +163,68 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: 131px;
-  height: 40px;
-  margin: 16px auto 0;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: var(--hp-yellow);
-  color: var(--hp-ink);
-  font: 700 19px 'Lato', sans-serif;
+  gap: var(--s-2);
+  min-height: var(--control-h);
+  margin: var(--s-5) auto 0;
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-headline);
+  white-space: nowrap;
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
+  transition: background-color 0.18s ease;
 }
 
 .hp-history:hover {
-  opacity: 1;
-}
-
-.hp-history:focus-visible {
-  outline: 3px solid var(--hp-ink);
-  outline-offset: 3px;
+  background: var(--surface-card-hover);
 }
 
 .hp-hint {
   position: absolute;
   left: 4%;
-  bottom: calc(100% - 4px);
+  bottom: calc(100% + var(--s-2));
   z-index: 2;
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--s-1);
   pointer-events: none;
-  color: var(--hp-ink);
+  color: var(--ink);
 }
 
 .hp-hint-text {
-  font-family: 'Sedgwick Ave', cursive;
-  font-size: clamp(0.9rem, 1.4vw, 1.2rem);
+  font: var(--t-callout);
+  font-family: var(--font-brand);
+  font-weight: 400;
   line-height: 1.3;
   transform: rotate(-12deg);
   text-align: center;
 }
 
 .hp-hint-arrow {
-  width: clamp(70px, 8vw, 110px);
+  width: var(--s-12);
   height: auto;
-  margin-bottom: 4px;
+  margin-bottom: var(--s-1);
 }
 
 .hp-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(16px, 2.6vw, 34px);
-  padding: clamp(18px, 2.4vw, 32px);
-  border-radius: clamp(28px, 4vw, 52px);
-  background: var(--hp-panel);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+  gap: var(--pad-panel);
+  padding: var(--pad-panel);
+  /* The grouped box behind the four cards. Apple inset-grouped style: a
+     quiet secondary-system fill with a hairline edge, with the white cards
+     sitting on top of it. Corners stay concentric with the cards:
+     18px card radius + 16px padding = 34px panel radius. */
+  max-width: 980px;
+  margin-inline: auto;
+  border: 1px solid var(--hairline);
+  border-radius: calc(var(--r-lg) + var(--pad-panel));
+  background: var(--surface-panel);
+  -webkit-backdrop-filter: var(--panel-blur);
+  backdrop-filter: var(--panel-blur);
+  box-shadow: var(--shadow-tile);
 }
 
 /* ---------- Cards ---------- */
@@ -233,36 +232,60 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
+  gap: var(--s-3);
   min-height: clamp(170px, 18vw, 200px);
-  padding: 12px clamp(20px, 2.4vw, 32px) 20px;
-  /* Transparent border reserves space so hover doesn't shift the layout */
-  border: 3px solid transparent;
-  border-radius: clamp(28px, 3.6vw, 48px);
-  background: var(--hp-card);
-  color: inherit;
-  font-family: 'Noto Sans', sans-serif;
+  padding: var(--s-6);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-tile);
+  color: var(--ink);
+  font: var(--t-body);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.18s ease;
+  transition: background-color .344s ease, box-shadow .3s ease,
+              transform .3s cubic-bezier(0, 0, .5, 1), border-color .2s ease;
 }
 
 .hp-card:hover {
-  border-color: var(--hp-ink);
+  background: var(--surface-card-hover);
+  box-shadow: 8px 12px 24px 0 rgba(0, 0, 0, .12);
+  border-color: var(--ink-2);
+  transform: translateY(-2px);
+}
+
+.hp-card:focus-visible {
+  background: var(--surface-card-hover);
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  transform: translateY(-2px);
 }
 
 .hp-card-title {
   display: block;
-  text-align: center;
-  font-size: clamp(1.25rem, 1.9vw, 1.6rem);
-  font-weight: 700;
-  line-height: 1.3;
+  text-align: left;
+  font: var(--t-title3);
+  letter-spacing: var(--tracking-title);
 }
 
 .hp-card-desc {
   display: block;
-  font-size: clamp(0.85rem, 1.1vw, 0.95rem);
-  line-height: 1.55;
+  font: var(--t-callout);
+  color: var(--ink-2);
+}
+
+.hp-card-arrow {
+  align-self: flex-end;
+  margin-top: auto;
+  width: var(--s-6);
+  height: var(--s-6);
+  color: var(--ink-2);
+  transition: color 0.18s ease;
+}
+
+.hp-card:hover .hp-card-arrow,
+.hp-card:focus-visible .hp-card-arrow {
+  color: var(--ink);
 }
 
 /* ---------- Footer ---------- */
@@ -271,23 +294,24 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 16px 0 22px;
-  font-size: 1rem;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-4) var(--page-margin);
+  font: var(--t-footnote);
+  color: var(--ink-2);
 }
 
 .hp-email {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: inherit;
+  gap: var(--s-2);
+  color: var(--ink);
   text-decoration: none;
 }
 
 .hp-mail-icon {
-  width: 24px;
-  height: 24px;
-  color: #6b7378;
+  width: var(--s-5);
+  height: var(--s-5);
+  color: var(--ink-2);
 }
 
 /* ---------- Responsive ---------- */
@@ -295,38 +319,65 @@
   .hp-main {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: 56px;
-    padding-top: 16px;
+    gap: var(--s-8);
+    padding-top: var(--s-4);
   }
 
   .hp-intro {
-    max-width: 560px;
-    margin-left: 0;
+    max-width: 100%;
   }
 
   .hp-models {
     justify-self: stretch;
-    max-width: none;
+  }
+
+  .hp-hint {
+    position: static;
+    margin: 0 0 var(--s-2) var(--s-1);
   }
 }
 
 @media (max-width: 560px) {
+  .hp-header {
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+  .hp-logo-text {
+    font-size: 24px;
+  }
+  .hp-about {
+    margin-left: auto;
+    padding: 0 var(--s-3);
+  }
   .hp-panel {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .hp-card {
     min-height: 140px;
+    padding: var(--s-4);
   }
 
   .hp-about {
-    padding: 8px 10px 8px 16px;
-    font-size: 0.9rem;
+    padding: 0 var(--s-4);
+    font: var(--t-subhead);
+    font-weight: 600;
+  }
+
+  .hp-logo-text {
+    font: var(--t-title1);
+    font-family: var(--font-brand);
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .hp-logo-icon {
+    font-size: var(--s-5);
   }
 
   .hp-about-icon {
-    width: 26px;
-    height: 26px;
+    width: var(--s-4);
+    height: var(--s-4);
   }
 
   .hp-footer {
@@ -336,10 +387,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hp-intro {
-    animation: none;
-  }
-  .hp-card {
+  .hp-card,
+  .hp-about,
+  .hp-history {
     transition: none;
   }
 }
+

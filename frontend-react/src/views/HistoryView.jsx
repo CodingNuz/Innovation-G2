@@ -8,6 +8,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { axisOptions, baseOptions, palette } from '../charts/setup'
+import { useCountUp } from '../motion.jsx'
+import { useWidgetGrid } from '../useWidgetGrid'
+import '../WidgetGrid.css'
+import '../History.css'
 
 /* ------------------------------------------------------------------ */
 /* constants                                                           */
@@ -395,10 +399,26 @@ function detailFields(row) {
 /* pieces                                                              */
 /* ------------------------------------------------------------------ */
 
-function ChartCard({ title, wide = false, note, children }) {
+function ChartCard({ id, title, size, note, children, onPointerDown, onResize, refade }) {
   return (
-    <section className={`history-chart-card${wide ? ' history-chart-card-wide' : ''}`}>
-      <h3 className="history-chart-title">{title}</h3>
+    <section
+      className={`history-widget history-chart-card reveal size-${size}${refade ? ' refade' : ''}`}
+      data-widget={id}
+    >
+      <div className="w-head" onPointerDown={(event) => onPointerDown(event, id)}>
+        <h3 className="w-title history-chart-title">{title}</h3>
+        <div className="w-tools">
+          <button
+            type="button"
+            className="w-size"
+            onClick={() => onResize(id)}
+            aria-label={`Resize ${title} widget`}
+            title="Change widget size"
+          >
+            ⤢
+          </button>
+        </div>
+      </div>
       <div className="history-chart-area">{children}</div>
       {note ? <p className="history-chart-note">{note}</p> : null}
     </section>
@@ -408,7 +428,7 @@ function ChartCard({ title, wide = false, note, children }) {
 function ModelBadge({ model }) {
   const info = MODELS[model]
   return (
-    <span className="history-badge">
+    <span className={'history-badge is-' + (model === 'process' ? 'neutral' : 'spam')}>
       <i className={info.icon} aria-hidden="true" />
       {info.label}
     </span>
@@ -466,6 +486,8 @@ export default function HistoryView({ history, onClearHistory }) {
   const [expandedKey, setExpandedKey] = useState(null)
   const [confirming, setConfirming] = useState(false)
   const cancelRef = useRef(null)
+  const [refadeId, setRefadeId] = useState(null)
+  const { layout, gridRef, draggingId, onPointerDown, cycleSize, resetLayout } = useWidgetGrid()
 
   useEffect(() => {
     if (confirming) cancelRef.current?.focus()
@@ -532,6 +554,9 @@ export default function HistoryView({ history, onClearHistory }) {
     }
   }, [filtered])
 
+  const totalRef = useCountUp(stats.total)
+  const detectionRef = useCountUp(stats.detection)
+
   const doughnut = useMemo(() => {
     const groups = new Map()
     for (const row of filtered) {
@@ -592,7 +617,7 @@ export default function HistoryView({ history, onClearHistory }) {
             label: 'Predictions',
             data: activity.values,
             borderColor: palette.dark,
-            backgroundColor: 'rgba(255, 216, 3, 0.28)',
+            backgroundColor: 'rgba(0, 113, 227, 0.22)',
             pointBackgroundColor: palette.yellow,
             pointBorderColor: palette.dark,
             pointRadius: activity.values.length > 60 ? 0 : 4,
@@ -674,7 +699,7 @@ export default function HistoryView({ history, onClearHistory }) {
               Every successful prediction from the Spam or HAM, Malware and Process tabs is
               collected here for the current session.
             </p>
-            <p>Run a prediction in one of the model tabs, then come back to see your charts.</p>
+            <p>Run a prediction in the Spam, Malware or Process tab, then come back to see your charts and table.</p>
           </div>
         </div>
       </section>
@@ -690,10 +715,10 @@ export default function HistoryView({ history, onClearHistory }) {
       <div className="history-inner">
         {/* Summary statistics */}
         <div className="history-stats" role="group" aria-label="Summary statistics">
-          <article className="history-stat-card">
+          <article className="history-stat-card reveal">
             <div>
               <h3 className="history-stat-label">Total predictions</h3>
-              <p className="history-stat-value">{stats.total}</p>
+              <p className="history-stat-value" ref={totalRef}>{stats.total}</p>
               <p className="history-stat-note">
                 {stats.total === records.length
                   ? 'All predictions this session'
@@ -703,10 +728,10 @@ export default function HistoryView({ history, onClearHistory }) {
             <i className="fa-solid fa-boxes-stacked history-stat-icon" aria-hidden="true" />
           </article>
 
-          <article className="history-stat-card">
+          <article className="history-stat-card reveal delay-1">
             <div>
               <h3 className="history-stat-label">Detection results</h3>
-              <p className="history-stat-value">{stats.detection}</p>
+              <p className="history-stat-value" ref={detectionRef}>{stats.detection}</p>
               <p className="history-stat-note">
                 {stats.detection === 0
                   ? 'No spam or malware predictions here'
@@ -729,7 +754,7 @@ export default function HistoryView({ history, onClearHistory }) {
 
         {/* Filters */}
         <form
-          className="history-filters"
+          className="history-filters reveal"
           aria-label="Filter prediction history"
           onSubmit={(event) => event.preventDefault()}
         >
@@ -821,70 +846,100 @@ export default function HistoryView({ history, onClearHistory }) {
           <div className="history-empty">
             <i className="fa-solid fa-filter-circle-xmark history-empty-icon" aria-hidden="true" />
             <h3>No predictions match these filters</h3>
-            <p>Try a different model, verdict or date range.</p>
+            <p>Try a different model, verdict or date range, or reset the filters below.</p>
             <button type="button" className="butt history-btn" onClick={resetFilters}>
               Reset filters
             </button>
           </div>
         ) : (
           <>
-            {/* Charts */}
-            <div className="history-charts">
-              <ChartCard
-                title="Verdict distribution"
-                note="Spam and malware classifications only. Process predictions are numbers, not verdicts."
-              >
-                {doughnut.total > 0 ? (
-                  <Doughnut
-                    data={doughnut.data}
-                    options={doughnutOptions}
-                    role="img"
-                    aria-label={`Doughnut chart of verdicts: ${doughnut.labels.join(', ')}`}
-                  />
-                ) : (
-                  <p className="history-chart-empty">
-                    No spam or malware predictions in this selection.
-                  </p>
-                )}
-              </ChartCard>
-
-              <ChartCard title="Predictions by model">
-                <Bar
-                  data={barData}
-                  options={barOptions}
-                  role="img"
-                  aria-label={`Bar chart of predictions by model: ${MODEL_KEYS.map(
-                    (key) => `${MODELS[key].label} ${stats.perModel[key]}`,
-                  ).join(', ')}`}
-                />
-              </ChartCard>
-
-              <ChartCard
-                wide
-                title="Prediction activity over time"
-                note={
-                  activity
-                    ? `Predictions per ${activity.unit}${
-                        activity.skipped
-                          ? `. ${plural(activity.skipped, 'prediction')} without a valid date not shown.`
-                          : '.'
-                      }`
-                    : undefined
+            {/* Charts: draggable / resizable widgets */}
+            <div className="history-toolbar reveal">
+              <span className="history-toolbar-hint">Drag a chart by its title to reorder; use ⤢ to resize.</span>
+              <button type="button" className="linkbutt" onClick={resetLayout}>
+                Reset layout
+              </button>
+            </div>
+            <div className="history-widgets" id="history-widgets" ref={gridRef}>
+              {layout.map((item) => {
+                const common = {
+                  id: item.id,
+                  size: item.size,
+                  onPointerDown,
+                  onResize: (id) => {
+                    cycleSize(id)
+                    setRefadeId(id)
+                    setTimeout(() => setRefadeId(null), 380)
+                  },
+                  refade: refadeId === item.id && draggingId === null,
                 }
-              >
-                {lineData ? (
-                  <Line
-                    data={lineData}
-                    options={lineOptions}
-                    role="img"
-                    aria-label="Line chart of prediction activity over time"
-                  />
-                ) : (
-                  <p className="history-chart-empty">
-                    The predictions in this selection have no valid date.
-                  </p>
-                )}
-              </ChartCard>
+                if (item.id === 'verdicts') {
+                  return (
+                    <ChartCard
+                      key={item.id}
+                      {...common}
+                      title="Verdict distribution"
+                      note="Spam and malware classifications only. Process predictions are numbers, not verdicts."
+                    >
+                      {doughnut.total > 0 ? (
+                        <Doughnut
+                          data={doughnut.data}
+                          options={doughnutOptions}
+                          role="img"
+                          aria-label={`Doughnut chart of verdicts: ${doughnut.labels.join(', ')}`}
+                        />
+                      ) : (
+                        <p className="history-chart-empty">
+                          No spam or malware predictions in this selection.
+                        </p>
+                      )}
+                    </ChartCard>
+                  )
+                }
+                if (item.id === 'by-model') {
+                  return (
+                    <ChartCard key={item.id} {...common} title="Predictions by model">
+                      <Bar
+                        data={barData}
+                        options={barOptions}
+                        role="img"
+                        aria-label={`Bar chart of predictions by model: ${MODEL_KEYS.map(
+                          (key) => `${MODELS[key].label} ${stats.perModel[key]}`,
+                        ).join(', ')}`}
+                      />
+                    </ChartCard>
+                  )
+                }
+                return (
+                  <ChartCard
+                    key={item.id}
+                    {...common}
+                    title="Prediction activity over time"
+                    note={
+                      activity
+                        ? `Predictions per ${activity.unit}${
+                            activity.skipped
+                              ? `. ${plural(activity.skipped, 'prediction')} without a valid date not shown.`
+                              : '.'
+                          }`
+                        : undefined
+                    }
+                  >
+                    {lineData ? (
+                      <Line
+                        data={lineData}
+                        options={lineOptions}
+                        role="img"
+                        aria-label="Line chart of prediction activity over time"
+                      />
+                    ) : (
+                      <p className="history-chart-empty">
+                        The predictions in this selection have no valid date.
+                      </p>
+                    )}
+                  </ChartCard>
+                )
+              })}
             </div>
 
             {/* Individual predictions */}
@@ -892,7 +947,7 @@ export default function HistoryView({ history, onClearHistory }) {
               <h3 id="history-list-title" className="history-section-title">
                 Individual predictions
               </h3>
-              <div className="history-table-wrap">
+              <div className="history-table-wrap reveal">
                 <table className="history-table">
                   <caption className="visually-hidden">
                     Prediction history, newest first

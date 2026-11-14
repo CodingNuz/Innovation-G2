@@ -42,9 +42,9 @@ function ChameleonIcon() {
 function InfoIcon() {
   return (
     <svg className="hp-about-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="12" r="12" fill="currentColor" />
-      <rect x="10.600" y="10" width="2.800" height="8" rx="1.100" fill="#ffd803" />
-      <circle cx="12" cy="6.800" r="1.700" fill="#ffd803" />
+      <circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect x="11" y="10" width="2" height="7" rx="1" fill="currentColor" />
+      <circle cx="12" cy="7" r="1.4" fill="currentColor" />
     </svg>
   );
 }
@@ -67,6 +67,21 @@ function ModelCard({ model, onSelect }) {
     >
       <span className="hp-card-title">{model.title}</span>
       <span className="hp-card-desc">{model.description}</span>
+      <svg
+        className="hp-card-arrow"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M5 12h13M13 6l6 6-6 6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </button>
   );
 }
@@ -93,12 +108,12 @@ export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }
         </a>
         <button type="button" className="hp-about" onClick={onAboutClick}>
           <span>about us</span>
-          <i className="fa-solid fa-circle-info" aria-hidden="true" />
+          <InfoIcon />
         </button>
       </header>
 
       <main className="hp-main">
-        <section className="hp-intro" aria-labelledby="hp-welcome">
+        <section className="hp-intro reveal" aria-labelledby="hp-welcome">
           <h1 id="hp-welcome" className="hp-welcome">
             Welcome to SpamChameleon<span className="hp-comma">,</span>
           </h1>
@@ -135,7 +150,7 @@ export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }
             </svg>
           </div>
 
-          <div className="hp-panel">
+          <div className="hp-panel reveal is-container">
             {MODELS.map((m) => (
               <ModelCard key={m.id} model={m} onSelect={onSelectModel} />
             ))}

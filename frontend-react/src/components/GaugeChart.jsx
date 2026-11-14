@@ -17,7 +17,7 @@ export default function GaugeChart({
     datasets: [
       {
         data: [filled, 100 - filled],
-        backgroundColor: [color, 'rgba(39, 35, 67, 0.08)'],
+        backgroundColor: [color, palette.track],
         borderWidth: 0,
         borderRadius: 12,
         circumference: 180,

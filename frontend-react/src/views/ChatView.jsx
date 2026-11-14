@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Alert from '../components/Alert'
 import { api } from '../api/client'
+import AssistantGreeting from '../components/AssistantGreeting'
+import { useRevealOnMount } from '../motion.jsx'
 
 // Tool names are function identifiers; people read "Spam check".
 const TOOL_LABELS = {
@@ -260,6 +262,10 @@ export default function ChatView() {
           </div>
         </header>
 
+        {messages.length === 0 ? (
+          <AssistantGreeting />
+        ) : null}
+
         <div className="chatlog" ref={listRef} aria-live="polite">
           {messages.length === 0 ? (
             <div className="chathint">
@@ -445,9 +451,10 @@ function AssistantMessage({ message }) {
   const shown = useTypewriter(text, message.animate === true)
   const finished = shown.length >= text.length
   const report = parseReport(text, message.tools)
+  const revealRef = useRevealOnMount()
 
   return (
-    <article className="answer">
+    <article className="answer reveal" ref={revealRef}>
       <header className="answerhead">
         <span className="answersource">
           <i className="fa-solid fa-robot" aria-hidden="true" /> assistant

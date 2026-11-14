@@ -1,0 +1,692 @@
+/* History dashboard styles. Tokens come from App.css. */
+
+/* ---------- history dashboard ---------- */
+
+.history-view {
+  width: var(--content-w);
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--s-6);
+
+  background: var(--surface-panel);
+  -webkit-backdrop-filter: var(--panel-blur);
+  backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--line-panel);
+  box-shadow: var(--shadow-panel);
+  border-radius: var(--r-panel);
+}
+
+.history-header {
+  padding: 0 0 var(--s-5);
+}
+.history-title {
+  margin: 0;
+  font: var(--t-title1);
+  letter-spacing: var(--tracking-title);
+  text-align: center;
+}
+
+.history-inner {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  background: transparent;
+}
+
+.history-section-title {
+  margin: 0 0 var(--s-4);
+  font: var(--t-title3);
+  letter-spacing: var(--tracking-title);
+}
+
+/* ----- summary statistics ----- */
+
+.history-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+.history-stat-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-5);
+  background: var(--surface-card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.history-stat-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+.history-stat-label {
+  margin: 0;
+  font: var(--t-subhead);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.history-stat-value {
+  margin: var(--s-1) 0 0;
+  font: var(--t-large);
+  font-variant-numeric: tabular-nums;
+}
+.history-stat-note {
+  margin: var(--s-2) 0 0;
+  font: var(--t-footnote);
+  color: var(--ink-2);
+}
+.history-stat-icon {
+  /* Icon glyphs keep Font Awesome's own family; only size and colour are set. */
+  flex: none;
+  font-size: 1.5em;
+  line-height: 1;
+  color: var(--accent-text);
+}
+
+.history-model-counts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-model-counts li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-4);
+  background: var(--fill);
+  border-radius: var(--r-pill);
+  font: var(--t-footnote);
+}
+.history-model-counts strong {
+  font: var(--t-callout);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- filters ----- */
+
+.history-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+  padding: var(--s-5);
+  background: var(--surface-card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+}
+.history-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.history-field label {
+  font: var(--t-caption);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.history-field .select,
+.history-field .textinput {
+  width: 100%;
+}
+.history-field .select:disabled {
+  cursor: not-allowed;
+  background: var(--surface-card);
+  color: var(--ink-2);
+}
+.history-filter-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.history-count {
+  margin: 0;
+  font: var(--t-subhead);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.history-alert {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+/* ----- charts ----- */
+
+.history-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+}
+.history-chart-card {
+  min-width: 0;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.history-chart-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+.history-chart-card-wide {
+  grid-column: 1 / -1;
+}
+.history-chart-title {
+  margin: 0 0 var(--s-3);
+  font: var(--t-headline);
+}
+.history-chart-area {
+  position: relative;
+  height: 260px;
+  padding: var(--s-3);
+  background: var(--surface-card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+}
+.history-chart-note {
+  margin: var(--s-2) 0 0;
+  font: var(--t-caption);
+  color: var(--ink-2);
+}
+.history-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 var(--s-4);
+  text-align: center;
+  font: var(--t-subhead);
+  color: var(--ink-2);
+}
+
+/* ----- buttons ----- */
+
+/* Secondary by default; the global .butt stays the primary accent action. */
+.history-btn {
+  min-height: var(--control-h);
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-headline);
+}
+.history-btn:hover:not(:disabled) {
+  background: var(--surface-card-hover);
+}
+.history-btn:disabled {
+  background: var(--surface-card);
+  color: var(--ink-2);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+/* One accent action per area: the first action is the primary. */
+.history-actions .history-btn:first-child {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.history-actions .history-btn:first-child:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.history-actions .history-btn:first-child:disabled {
+  background: var(--accent-soft);
+  color: #00508f;
+  border-color: transparent;
+}
+.history-btn-danger {
+  background: var(--surface);
+  border: 1px solid var(--spam);
+  color: var(--spam);
+}
+.history-btn-danger:hover:not(:disabled) {
+  background: var(--spam-tint);
+  color: var(--spam);
+}
+.history-btn-danger:disabled {
+  background: var(--surface-card);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+.history-btn-confirm {
+  background: var(--spam);
+  border-color: var(--spam);
+  color: var(--accent-ink);
+}
+.history-btn-confirm:hover:not(:disabled) {
+  background: var(--spam);
+  box-shadow: 0 0 0 3px var(--spam-tint);
+}
+/* The reset button is the only action in the filtered empty state. */
+.history-empty .history-btn {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.history-empty .history-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* ----- history table ----- */
+
+.history-table-wrap {
+  padding: var(--s-1) var(--s-3);
+  background: var(--surface-card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.history-table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+.history-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.history-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+}
+.history-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font: var(--t-subhead);
+}
+.history-table th {
+  padding: var(--s-3);
+  text-align: left;
+  background: var(--surface-card-hover);
+  font: var(--t-caption);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+}
+.history-table td {
+  padding: var(--s-3);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--line);
+}
+.history-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.history-table tbody tr:hover {
+  background: var(--surface-card-hover);
+}
+.history-table td:first-child {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.history-table td:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The details column stays reachable while the table scrolls sideways. */
+.history-table thead th:last-child,
+.history-table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--surface-card);
+  text-align: right;
+  box-shadow: -8px 0 8px -6px rgba(0, 0, 0, 0.12);
+}
+.history-table thead th:last-child {
+  background: var(--surface-card-hover);
+}
+.history-table tbody tr:hover td:last-child {
+  background: var(--surface-card-hover);
+}
+.history-row.is-open td:last-child {
+  background: var(--surface-card-hover);
+}
+/* The expanded row spans the full width, so its cell must not stick. */
+.history-table tbody td.history-details-cell {
+  position: static;
+  box-shadow: none;
+  text-align: left;
+  /* It is also a first/last child, so undo the column treatments. */
+  font-family: inherit;
+  font-size: inherit;
+  white-space: normal;
+}
+.history-col-date {
+  width: 19%;
+}
+.history-col-model {
+  width: 12%;
+}
+.history-col-result {
+  width: 17%;
+}
+.history-col-prob {
+  width: 12%;
+}
+.history-col-input {
+  width: 28%;
+}
+.history-col-more {
+  width: 12%;
+}
+.history-row.is-open td {
+  background: var(--surface-card-hover);
+  border-bottom-color: transparent;
+}
+
+.history-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
+  background: var(--fill);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font: var(--t-caption);
+  font-weight: 600;
+}
+.history-badge.is-spam {
+  background: var(--spam-tint);
+  color: var(--spam);
+  border-color: transparent;
+}
+.history-badge.is-ham {
+  background: var(--ham-tint);
+  color: var(--ham);
+  border-color: transparent;
+}
+.history-verdict {
+  font-weight: 600;
+}
+.history-verdict.is-bad {
+  color: var(--spam);
+}
+.history-verdict.is-good {
+  color: var(--ham);
+}
+.history-cell-sub {
+  display: block;
+  margin-top: var(--s-1);
+  font: var(--t-caption);
+  color: var(--ink-2);
+}
+.history-cell-kind {
+  margin: 0 0 var(--s-1);
+  font-weight: 600;
+}
+.history-summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-toggle {
+  font: var(--t-subhead);
+  font-weight: 600;
+}
+
+.history-table td.history-details-cell {
+  padding: 0 0 var(--s-3);
+  background: var(--surface-card);
+}
+.history-details {
+  margin: 0;
+  padding: var(--s-1) var(--s-3) var(--s-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--s-3) var(--s-5);
+}
+.history-detail {
+  min-width: 0;
+}
+.history-detail-wide {
+  grid-column: 1 / -1;
+}
+.history-details dt {
+  font: var(--t-caption);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.history-details dd {
+  margin: var(--s-1) 0 0;
+  font: var(--t-subhead);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.history-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--s-4);
+}
+
+/* ----- actions ----- */
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.history-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+  flex-wrap: wrap;
+  margin-top: var(--s-4);
+  padding: var(--s-4);
+  background: var(--spam-tint);
+  border: 1px solid var(--spam);
+  border-radius: var(--r-md);
+  color: var(--spam);
+}
+.history-confirm p {
+  flex: 1 1 15rem;
+  margin: 0;
+  font: var(--t-subhead);
+}
+.history-confirm-actions {
+  display: flex;
+  gap: var(--s-3);
+}
+.history-note {
+  margin: var(--s-3) 0 0;
+  font: var(--t-footnote);
+  color: var(--ink-2);
+}
+
+/* ----- empty state ----- */
+
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-10) var(--s-6);
+  text-align: center;
+}
+.history-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  font-size: 40px;
+  line-height: 1;
+  opacity: 0.55;
+  color: var(--ink-3);
+}
+.history-empty h3 {
+  margin: 0;
+  font: var(--t-title3);
+  letter-spacing: var(--tracking-title);
+}
+.history-empty p {
+  max-width: 46ch;
+  margin: 0;
+  font: var(--t-body);
+  color: var(--ink-2);
+}
+
+/* ----- responsive ----- */
+
+@media (max-width: 900px) {
+  .history-view {
+    width: 100%;
+    padding: var(--s-5);
+  }
+  .history-header {
+    padding: 0 0 var(--s-4);
+  }
+  .history-title {
+    font: var(--t-title2);
+    letter-spacing: var(--tracking-title);
+  }
+  .history-inner {
+    gap: var(--s-5);
+  }
+}
+
+@media (max-width: 560px) {
+  .history-view {
+    padding: var(--s-4);
+  }
+  .history-title {
+    font: var(--t-title3);
+    letter-spacing: var(--tracking-title);
+  }
+  .history-header {
+    padding: 0 0 var(--s-3);
+  }
+  .history-inner {
+    gap: var(--s-5);
+  }
+
+  .history-stats,
+  .history-charts,
+  .history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .history-stat-card {
+    padding: var(--s-4);
+    border-radius: var(--r-card);
+  }
+  .history-filters {
+    padding: var(--s-4);
+    border-radius: var(--r-card);
+  }
+  .history-chart-area {
+    height: 220px;
+  }
+
+  /* The table turns into a stack of cards: each cell shows its own label. */
+  .history-table-wrap {
+    padding: var(--s-1) var(--s-2);
+    border-radius: var(--r-md);
+    overflow-x: visible;
+  }
+  .history-table,
+  .history-table tbody,
+  .history-table tr,
+  .history-table td {
+    display: block;
+    width: 100%;
+  }
+  .history-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .history-row {
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .history-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .history-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-1) var(--s-2);
+    border-bottom: none;
+  }
+  .history-table td::before {
+    content: attr(data-label);
+    flex: none;
+    font: var(--t-caption);
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .history-table thead th:last-child,
+  .history-table tbody td:last-child {
+    position: static;
+    box-shadow: none;
+    background: transparent;
+    text-align: left;
+  }
+  .history-table tbody tr:hover td:last-child {
+    background: transparent;
+  }
+  .history-table td:nth-child(4) {
+    text-align: right;
+  }
+  .history-cell {
+    min-width: 0;
+    text-align: right;
+  }
+  .history-summary {
+    white-space: normal;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .history-table td.history-details-cell {
+    display: block;
+    padding: 0 0 var(--s-2);
+  }
+  .history-table td.history-details-cell::before {
+    content: none;
+  }
+  .history-details {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--s-1) var(--s-3) var(--s-2);
+  }
+
+  .history-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .history-more .history-btn,
+  .history-confirm-actions,
+  .history-confirm-actions .history-btn {
+    width: 100%;
+  }
+  .history-empty {
+    padding: var(--s-6) var(--s-2);
+  }
+  .history-empty h3 {
+    font: var(--t-title3);
+  }
+}
+

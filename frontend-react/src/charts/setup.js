@@ -35,13 +35,18 @@ ChartJS.register(
 
 // Shared chart palette, kept in step with App.css.
 export const palette = {
-  dark: '#272343',
-  yellow: '#ffd803',
-  blue: '#bae8e8',
-  blueLight: '#e3f6f5',
-  spam: '#d40202',
-  ham: '#3dd402',
-  muted: '#8b88a8',
+  dark: '#1d1d1f',
+  yellow: '#ffcc00',
+  blue: '#0071e3',
+  blueLight: '#f5f5f7',
+  // Apple system colors, darkened where necessary to stay readable on #f5f5f7.
+  teal: '#0066cc',
+  spam: '#d70015',
+  ham: '#1f7a37',
+  warn: '#c93400',
+  muted: '#636366',
+  track: 'rgba(118, 118, 128, 0.2)',
+  grid: 'rgba(60, 60, 67, 0.12)',
 }
 
 /** Shared options: no animation lag, readable fonts, light gridlines. */
@@ -51,12 +56,12 @@ export const baseOptions = {
   animation: { duration: 350 },
   plugins: {
     legend: {
-      labels: { font: { family: 'Noto Sans', size: 13 }, color: palette.dark },
+      labels: { font: { family: 'system-ui', size: 13 }, color: palette.dark },
     },
     tooltip: {
       backgroundColor: palette.dark,
-      titleFont: { family: 'Noto Sans', size: 13 },
-      bodyFont: { family: 'Noto Sans', size: 13 },
+      titleFont: { family: 'system-ui', size: 13 },
+      bodyFont: { family: 'system-ui', size: 13 },
       padding: 10,
       cornerRadius: 10,
     },
@@ -65,6 +70,6 @@ export const baseOptions = {
 
 /** Axis styling shared by the bar and line charts. */
 export const axisOptions = {
-  grid: { color: 'rgba(39, 35, 67, 0.08)' },
-  ticks: { color: palette.dark, font: { family: 'Noto Sans', size: 12 } },
+  grid: { color: palette.grid },
+  ticks: { color: palette.muted, font: { family: 'system-ui', size: 12 } },
 }

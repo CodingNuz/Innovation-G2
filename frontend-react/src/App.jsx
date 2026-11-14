@@ -10,6 +10,7 @@ import SpamView from './views/SpamView'
 import { api } from './api/client'
 import HistoryView from './views/HistoryView'
 import backgroundGif from './views/assets/background.gif'
+import { useMotionRoot } from './motion.jsx'
 
 const TABS = [
   { id: 'spam', label: 'Spam', icon: 'fa-solid fa-envelope', component: SpamView },
@@ -40,6 +41,7 @@ export default function App() {
   const [tab, setTab] = useState('home')
   const [aboutOpen, setAboutOpen] = useState(false)
   const [health, setHealth] = useState(null)
+  useMotionRoot(tab)
 
   // Shared prediction history for the current session.
   const [predictionHistory, setPredictionHistory] = useState([])
@@ -126,9 +128,10 @@ export default function App() {
 
           <main className="main" id="top">
             {tab === 'history' ? (
-              <HistoryView history={predictionHistory} onClearHistory={clearHistory} />
+              <HistoryView key={tab} history={predictionHistory} onClearHistory={clearHistory} />
             ) : (
               <Active
+                key={tab}
                 onPrediction={recordPrediction}
               />
             )}

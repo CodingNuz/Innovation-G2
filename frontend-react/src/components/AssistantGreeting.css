@@ -1,0 +1,60 @@
+.assistant-greet {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  color: var(--ink);
+  transition: max-height .45s cubic-bezier(.22,.61,.36,1),
+              opacity .45s cubic-bezier(.22,.61,.36,1),
+              margin .45s cubic-bezier(.22,.61,.36,1);
+}
+.assistant-greet-open {
+  max-height: 120px;
+  opacity: 1;
+  margin: 0 0 var(--s-4);
+}
+.assistant-greet-done {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+}
+.assistant-greet-text {
+  font: var(--t-title3);
+  letter-spacing: var(--tracking-title);
+  text-align: center;
+  will-change: filter, opacity, transform;
+}
+.assistant-greet-open .assistant-greet-text {
+  animation: greetGhostIn .9s cubic-bezier(.22,.61,.36,1) both;
+}
+.assistant-greet-done .assistant-greet-text {
+  filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: filter .5s ease, opacity .5s ease, transform .5s ease;
+}
+@keyframes greetGhostIn {
+  0% { opacity: 0; filter: blur(8px); transform: translateY(6px) }
+  60% { opacity: 1 }
+  100% { opacity: 1; filter: blur(0); transform: none }
+}
+.assistant-greet-caret {
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(0, 113, 227, .5);
+  animation: greetBlink 1s step-end infinite;
+}
+@keyframes greetBlink { 50% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-greet,
+  .assistant-greet-text,
+  .assistant-greet-caret { animation: none !important; transition: none !important; }
+  .assistant-greet-open .assistant-greet-text { opacity: 1; filter: none; transform: none; }
+}
+

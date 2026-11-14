@@ -73,13 +73,14 @@ export default function SpamView({onPrediction}) {
         {
           label: 'Push toward spam',
           data: rows.map((r) => (r.weight > 0 ? r.weight : 0)),
-          backgroundColor: rows.map((r) => (r.weight > 0 ? palette.spam : 'transparent')),
+          // A single colour keeps the legend swatch visible; zero-length bars draw nothing.
+          backgroundColor: palette.spam,
           borderRadius: 6,
         },
         {
           label: 'Push toward ham',
           data: rows.map((r) => (r.weight < 0 ? r.weight : 0)),
-          backgroundColor: rows.map((r) => (r.weight < 0 ? palette.ham : 'transparent')),
+          backgroundColor: palette.ham,
           borderRadius: 6,
         },
       ],
@@ -94,7 +95,7 @@ export default function SpamView({onPrediction}) {
         ...axisOptions,
         title: { display: true, text: 'Contribution to the score', color: palette.dark },
       },
-      y: { ...axisOptions, grid: { display: false } },
+      y: { ...axisOptions, grid: { display: false }, ticks: { ...axisOptions.ticks, autoSkip: false } },
     },
     plugins: {
       ...baseOptions.plugins,
@@ -150,10 +151,8 @@ export default function SpamView({onPrediction}) {
       <form className="panel detector" onSubmit={check}>
         <h1 className="detitle">SPAM or HAM ?</h1>
 
+        <label className="fieldlabel-top" htmlFor="spam-input">Message to check</label>
         <div className="inputbox">
-          <label className="visually-hidden" htmlFor="spam-input">
-            Message to check
-          </label>
           <textarea
             id="spam-input"
             value={text}
@@ -167,30 +166,33 @@ export default function SpamView({onPrediction}) {
             placeholder="Insert your email or text message in here..."
             maxLength={20000}
           />
-          <button type="submit" className="butt checkbutt" disabled={!canCheck}>
-            {busy ? '...' : 'Check'}
-          </button>
-        </div>
-
-        <div className="pdf-upload">
-          <label htmlFor="spam-pdf">Upload email as a PDF:</label>
-          <input
-            id="spam-pdf" type="file" accept=".pdf,application/pdf"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-        </div>
-
-        <div className="examples">
-          <span>Try an example:</span>
-          <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.spam)}>
-            spam
-          </button>
-          <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.ham)}>
-            ham
-          </button>
           {text.length > 0 ? (
             <span className="charcount">{text.length} characters</span>
           ) : null}
+        </div>
+
+        <div className="formbar">
+          <div className="formbar-options">
+            <div className="pdf-upload">
+              <label htmlFor="spam-pdf">Upload email as a PDF:</label>
+              <input
+                id="spam-pdf" type="file" accept=".pdf,application/pdf"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="examples">
+              <span>Try an example:</span>
+              <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.spam)}>
+                spam
+              </button>
+              <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.ham)}>
+                ham
+              </button>
+            </div>
+          </div>
+          <button type="submit" className="butt checkbutt" disabled={!canCheck}>
+            {busy ? '...' : 'Check'}
+          </button>
         </div>
 
         {error ? <Alert kind="error">{error}</Alert> : null}

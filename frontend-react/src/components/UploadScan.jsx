@@ -75,7 +75,7 @@ export default function UploadScan({ onPrediction }) {
           onChange={pick}
           aria-label="Choose a file to scan"
         />
-        <button type="button" className="butt checkbutt static" disabled={!file || busy} onClick={scan}>
+        <button type="button" className="butt" disabled={!file || busy} onClick={scan}>
           {busy ? 'Scanning...' : 'Scan file'}
         </button>
       </div>

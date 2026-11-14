@@ -137,7 +137,7 @@ export default function ProcessView({ onPrediction }) {
         {
           label: 'Rest of the range',
           data: [(1 - share) * 100],
-          backgroundColor: 'rgba(39, 35, 67, 0.1)',
+          backgroundColor: palette.track,
           borderRadius: 12,
           borderSkipped: false,
           barPercentage: 0.5,
@@ -238,7 +238,7 @@ export default function ProcessView({ onPrediction }) {
           <div>
             <h2 className="resulttitle">
               <span style={{ color: palette.dark }}>PREDICTION</span>
-              <i className="fa-solid fa-gauge result-flag" style={{ color: palette.blue }} />
+              <i className="fa-solid fa-gauge result-flag" style={{ color: palette.teal }} />
             </h2>
             <p className="resultmeta">
               {result.model} &middot; target {result.target}
@@ -255,7 +255,7 @@ export default function ProcessView({ onPrediction }) {
 
             <GaugeChart
               value={position}
-              color={palette.blue}
+              color={palette.teal}
               caption="position in the training range"
             />
 
