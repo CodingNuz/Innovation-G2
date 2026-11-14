@@ -82,7 +82,104 @@ function useTypewriter(text, enabled) {
   return shown
 }
 
-export default function ChatView() {
+// Informational tools carry no prediction and are never recorded to History.
+const INFORMATIONAL_TOOLS = new Set([
+  'list_malware_platforms',
+  'get_model_info',
+  'get_attachment',
+  'read_attachment_text',
+])
+
+/**
+ * Turn one assistant tool call into a History record, or null to skip it.
+ * A malformed result yields null rather than throwing, so callers can map a
+ * whole batch without one bad entry breaking the turn.
+ */
+function predictionFromToolCall(call, prompt, file) {
+  if (!call || typeof call !== 'object') return null
+  const { tool, args = {}, result } = call
+  if (!tool || INFORMATIONAL_TOOLS.has(tool)) return null
+  if (result && typeof result === 'object' && 'error' in result) return null
+
+  const inputSummary =
+    (args && typeof args.text === 'string' ? args.text : undefined) ||
+    (file ? file.name : undefined) ||
+    prompt
+
+  if (tool === 'check_spam') {
+    if (!result || typeof result.probability !== 'number') return null
+    return {
+      model: 'spam',
+      verdict: result.verdict ? String(result.verdict).toLowerCase() : result.verdict,
+      probability: result.probability,
+      inputType: file ? 'File' : 'Text',
+      inputSummary,
+      suspicious_words: result.suspicious_words,
+      safe_words: result.safe_words,
+    }
+  }
+
+  if (tool === 'check_malware') {
+    if (!result || typeof result.probability !== 'number') return null
+    return {
+      model: 'malware',
+      verdict: result.verdict ? String(result.verdict).toLowerCase() : result.verdict,
+      probability: result.probability,
+      platform: result.platform || (args && args.platform),
+      inputType: file ? 'File' : 'Text',
+      inputSummary,
+    }
+  }
+
+  if (tool === 'scan_uploaded_file' || tool === 'scan_attachment') {
+    const looksSpam =
+      (result && (result.kind === 'spam' || Array.isArray(result.suspicious_words))) ||
+      (args && args.kind === 'spam')
+    if (!result || typeof result.probability !== 'number') return null
+    if (looksSpam) {
+      return {
+        model: 'spam',
+        verdict: result.verdict ? String(result.verdict).toLowerCase() : result.verdict,
+        probability: result.probability,
+        inputType: 'File',
+        inputSummary: result.filename || inputSummary,
+        suspicious_words: result.suspicious_words,
+        safe_words: result.safe_words,
+      }
+    }
+    return {
+      model: 'malware',
+      verdict: result.verdict ? String(result.verdict).toLowerCase() : result.verdict,
+      probability: result.probability,
+      platform: result.platform || result.file_type,
+      inputType: 'File',
+      inputSummary: result.filename || inputSummary,
+    }
+  }
+
+  if (tool === 'predict_process') {
+    const value =
+      typeof result === 'number'
+        ? result
+        : result && (result.prediction ?? result.result ?? result.value)
+    if (typeof value !== 'number' || Number.isNaN(value)) return null
+    return {
+      model: 'process',
+      prediction: value,
+      target: result && result.target,
+      modelName: result && result.model,
+      featuresGiven: result && result.features_given,
+      featuresImputed: result && result.features_imputed,
+      clipped: result && result.clipped,
+      inputType: 'Text',
+      inputSummary,
+    }
+  }
+
+  return null
+}
+
+export default function ChatView({ onPrediction }) {
   const [messages, setMessages] = useState([])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -197,6 +294,20 @@ export default function ChatView() {
         },
         attachment,
       )
+      // Record any real model predictions from this assistant turn into the
+      // shared History. A malformed tool result must never stop the chat
+      // message from rendering, so the whole pass is isolated.
+      if (typeof onPrediction === 'function') {
+        try {
+          for (const call of reply.tool_calls ?? []) {
+            const record = predictionFromToolCall(call, prompt, file)
+            if (record) onPrediction(record)
+          }
+        } catch {
+          // Best-effort: history recording must not break sending a message.
+        }
+      }
+
       setMessages((current) => [
         ...current,
         {
@@ -239,7 +350,7 @@ export default function ChatView() {
       >
         <header className="chathead">
           <div>
-            <h1 className="detitle">Ask the security assistant</h1>
+            <h1 className="detitle">Ask the Security Assistant</h1>
             <p className="subtitle">
               Verdicts come from the trained models, never from the language model alone.
             </p>
@@ -476,6 +587,8 @@ function AssistantMessage({ message }) {
 
       {finished && report.words.length > 0 ? <Evidence words={report.words} /> : null}
 
+      {finished && report.scan ? <ScanEvidence scan={report.scan} /> : null}
+
       {finished && message.tools.length > 0 ? (
         <ToolLog tools={message.tools} rounds={message.rounds} />
       ) : null}
@@ -483,8 +596,15 @@ function AssistantMessage({ message }) {
   )
 }
 
-/** Verdict word and probability, from the tool result when there is one. */
-const VERDICT_WORDS = ['SPAM', 'HAM', 'MALWARE', 'BENIGN']
+/** Verdict word and probability, from the tool result when there is one.
+ *  The file scanner also answers SUSPICIOUS and CANNOT_ASSESS. Those used to
+ *  fall through and leave the malware answer as plain prose, so a PDF scan
+ *  looked far plainer than a spam check. */
+const VERDICT_WORDS = [
+  'SPAM', 'HAM', 'MALWARE', 'BENIGN', 'SUSPICIOUS', 'CANNOT_ASSESS',
+]
+const THREAT_VERDICTS = new Set(['SPAM', 'MALWARE', 'SUSPICIOUS'])
+const UNKNOWN_VERDICTS = new Set(['CANNOT_ASSESS'])
 
 /** Drop the leading sentence that repeats the verdict stamp, if it adds no other claim. */
 
@@ -496,7 +616,9 @@ function parseReport(text, tools) {
     .filter((result) => result && typeof result.probability === 'number')
   const fromTool = scored.length > 0 ? scored[scored.length - 1] : null
 
-  const match = text.match(/\b(SPAM|HAM|MALWARE|BENIGN)\b/)
+  const match = text.match(
+    /\b(SPAM|HAM|MALWARE|BENIGN|SUSPICIOUS|CANNOT_ASSESS)\b/,
+  )
   const verdict = fromTool?.verdict ?? (match ? match[1] : null)
   const probability = fromTool?.probability ?? null
 
@@ -512,17 +634,42 @@ function parseReport(text, tools) {
       ]
     : []
 
-  return { verdict: VERDICT_WORDS.includes(verdict) ? verdict : null, probability, words }
+  // A file scan carries richer metadata than a text prediction: format, the
+  // layer that decided it, its coverage tier and the evidence strings behind
+  // the warning. Show those as a chip strip, the way spam shows its words.
+  const scanResult = (tools || [])
+    .map((call) => call.result)
+    .filter((result) => result && Array.isArray(result.evidence))
+    .pop()
+  const scan = scanResult
+    ? {
+        format: scanResult.format,
+        decidingLayer: scanResult.deciding_layer,
+        coverageTier: scanResult.coverage_tier,
+        evidence: (scanResult.evidence || []).slice(0, 4),
+        details: (scanResult.details || []).slice(0, 3),
+        filename: scanResult.filename,
+      }
+    : null
+
+  const upper = String(verdict ?? '').toUpperCase()
+  return {
+    verdict: VERDICT_WORDS.includes(upper) ? upper : null,
+    probability,
+    words,
+    scan,
+  }
 }
 
 /** Headline of the answer: the word, the number and a meter. */
 function VerdictStamp({ verdict, probability }) {
-  const bad = verdict === 'SPAM' || verdict === 'MALWARE'
+  const bad = THREAT_VERDICTS.has(verdict)
+  const unknown = UNKNOWN_VERDICTS.has(verdict)
   const percent = probability === null ? null : Math.round(probability * 1000) / 10
 
   return (
-    <div className={`stamp ${bad ? 'is-bad' : 'is-good'}`}>
-      <p className="stampword">{verdict}</p>
+    <div className={`stamp ${bad ? 'is-bad' : unknown ? 'is-unknown' : 'is-good'}`}>
+      <p className="stampword">{verdict.replace('_', ' ')}</p>
       {percent !== null ? (
         <div className="stampmeter">
           <span className="stamppct">{percent}%</span>
@@ -556,6 +703,63 @@ function Evidence({ words }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/** A file scan's findings as a chip strip, mirroring the spam evidence strip.
+ *  Scan evidence strings are longer than words, so they get their own layout. */
+function ScanEvidence({ scan }) {
+  const facts = [
+    scan.format && { label: 'Format', value: String(scan.format).toUpperCase() },
+    scan.decidingLayer && { label: 'Decided by', value: scan.decidingLayer },
+    scan.coverageTier && { label: 'Coverage', value: scan.coverageTier },
+  ].filter(Boolean)
+
+  const votes = (scan.details || []).map((item) => ({
+    label: item.model,
+    value: item.probability === null || item.probability === undefined
+      ? item.verdict
+      : Math.round(item.probability * 100) + '% ' + item.verdict,
+    bad: /MALWARE|SUSPICIOUS/i.test(String(item.verdict)),
+  }))
+
+  return (
+    <div className="scanevidence">
+      <p className="evidencetitle">What the file scan found</p>
+
+      {facts.length > 0 ? (
+        <ul className="scanfacts">
+          {facts.map((fact) => (
+            <li key={fact.label}>
+              <span className="scanfact-label">{fact.label}</span>
+              <strong>{fact.value}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {votes.length > 0 ? (
+        <ul className="scanvotes">
+          {votes.map((vote, index) => (
+            <li key={String(vote.label) + index} className={vote.bad ? 'is-bad' : 'is-good'}>
+              {vote.label}
+              <span>{vote.value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {(scan.evidence || []).length > 0 ? (
+        <ul className="scannotes">
+          {scan.evidence.map((note, index) => (
+            <li key={index}>
+              <i className="fa-solid fa-circle-info" aria-hidden="true" />
+              <span>{note}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   )
 }

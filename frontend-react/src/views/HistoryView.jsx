@@ -48,7 +48,9 @@ const CSV_FILENAME = 'spamchameleon-history.csv'
 
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
-  timeStyle: 'medium',
+  // Minutes are enough for a session history table; seconds push the column
+  // past its width in the mono face.
+  timeStyle: 'short',
 })
 const BUCKET_FORMATS = {
   minute: new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }),
@@ -299,13 +301,51 @@ function downloadCsv(rows) {
 
 const doughnutOptions = {
   ...baseOptions,
-  cutout: '58%',
+  // A thin band, matching the reference ring (30% of the radius).
+  cutout: '70%',
   plugins: {
     ...baseOptions.plugins,
     legend: {
       ...baseOptions.plugins.legend,
       position: 'bottom',
-      labels: { ...baseOptions.plugins.legend.labels, boxWidth: 14, padding: 12 },
+      labels: {
+        ...baseOptions.plugins.legend.labels,
+        usePointStyle: true,
+        // An explicit pointStyleWidth keeps the swatch square; without it
+        // Chart.js falls back to the label height and the square turns into
+        // a half circle.
+        pointStyle: 'rect',
+        pointStyleWidth: 10,
+        boxWidth: 10,
+        boxHeight: 10,
+        padding: 12,
+        // Each entry carries its own count and share, the way the reference
+        // legend reads: label, then "3 - 60%".
+        generateLabels: (chart) => {
+          const dataset = chart.data.datasets[0]
+          const values = dataset.data.map(Number)
+          const total = values.reduce((sum, n) => sum + n, 0)
+          return chart.data.labels.map((label, i) => {
+            const value = values[i] ?? 0
+            const share = total ? Math.round((value / total) * 100) : 0
+            const fill = Array.isArray(dataset.backgroundColor)
+              ? dataset.backgroundColor[i]
+              : dataset.backgroundColor
+            return {
+              text: label + '  ' + value + ' - ' + share + '%',
+              fillStyle: fill,
+              strokeStyle: fill,
+              // The item's own pointStyle wins over the labels option, and a
+              // doughnut dataset defaults to a circle, which the 10px box
+              // clips into a half circle.
+              pointStyle: 'rect',
+              lineWidth: 0,
+              hidden: !chart.getDataVisibility(i),
+              index: i,
+            }
+          })
+        },
+      },
     },
     tooltip: {
       ...baseOptions.plugins.tooltip,
@@ -322,17 +362,18 @@ const doughnutOptions = {
 
 const barOptions = {
   ...baseOptions,
+  indexAxis: 'y',
   plugins: {
     ...baseOptions.plugins,
     legend: { display: false },
     tooltip: {
       ...baseOptions.plugins.tooltip,
-      callbacks: { label: (context) => ` ${plural(context.parsed.y, 'prediction')}` },
+      callbacks: { label: (context) => ` ${plural(context.parsed.x, 'prediction')}` },
     },
   },
   scales: {
-    x: { ...axisOptions, grid: { display: false } },
-    y: { ...axisOptions, beginAtZero: true, ticks: { ...axisOptions.ticks, precision: 0 } },
+    x: { ...axisOptions, beginAtZero: true, ticks: { ...axisOptions.ticks, precision: 0 } },
+    y: { ...axisOptions, grid: { display: false } },
   },
 }
 
@@ -353,7 +394,15 @@ const lineOptions = {
       grid: { display: false },
       ticks: { ...axisOptions.ticks, maxTicksLimit: 8, maxRotation: 0 },
     },
-    y: { ...axisOptions, beginAtZero: true, ticks: { ...axisOptions.ticks, precision: 0 } },
+    y: {
+      ...axisOptions,
+      beginAtZero: true,
+      // Headroom above the tallest point, so a single prediction does not
+      // sit flush against the top gridline.
+      suggestedMax: 1,
+      grace: '25%',
+      ticks: { ...axisOptions.ticks, precision: 0 },
+    },
   },
 }
 
@@ -399,13 +448,21 @@ function detailFields(row) {
 /* pieces                                                              */
 /* ------------------------------------------------------------------ */
 
-function ChartCard({ id, title, size, note, children, onPointerDown, onResize, refade }) {
+function ChartCard({ id, title, size, summary, note, children, onPointerDown, onResize, refade, onMoveKey }) {
   return (
     <section
       className={`history-widget history-chart-card reveal size-${size}${refade ? ' refade' : ''}`}
       data-widget={id}
     >
-      <div className="w-head" onPointerDown={(event) => onPointerDown(event, id)}>
+      <div
+        className="w-head"
+        role="button"
+        tabIndex={0}
+        aria-label={"Move " + title + " widget"}
+        onPointerDown={(event) => onPointerDown(event, id)}
+        onKeyDown={(event) => onMoveKey(event, id, title)}
+      >
+        <span className="w-grip" aria-hidden="true" />
         <h3 className="w-title history-chart-title">{title}</h3>
         <div className="w-tools">
           <button
@@ -420,6 +477,7 @@ function ChartCard({ id, title, size, note, children, onPointerDown, onResize, r
         </div>
       </div>
       <div className="history-chart-area">{children}</div>
+      {summary ? <p className="history-chart-summary">{summary}</p> : null}
       {note ? <p className="history-chart-note">{note}</p> : null}
     </section>
   )
@@ -428,7 +486,7 @@ function ChartCard({ id, title, size, note, children, onPointerDown, onResize, r
 function ModelBadge({ model }) {
   const info = MODELS[model]
   return (
-    <span className={'history-badge is-' + (model === 'process' ? 'neutral' : 'spam')}>
+    <span className="history-badge is-model">
       <i className={info.icon} aria-hidden="true" />
       {info.label}
     </span>
@@ -437,9 +495,11 @@ function ModelBadge({ model }) {
 
 function ResultCell({ row }) {
   if (row.isClassification) {
+    // The verdict chip carries the colour; the model column stays neutral.
+    const tone = verdictTone(row.verdict) === 'bad' ? 'spam' : 'ham'
     return (
       <>
-        <span className={`history-verdict is-${verdictTone(row.verdict)}`}>
+        <span className={`history-badge is-${tone}`}>
           {verdictLabel(row.verdict)}
         </span>
         {row.raw.platform ? (
@@ -487,11 +547,43 @@ export default function HistoryView({ history, onClearHistory }) {
   const [confirming, setConfirming] = useState(false)
   const cancelRef = useRef(null)
   const [refadeId, setRefadeId] = useState(null)
-  const { layout, gridRef, draggingId, onPointerDown, cycleSize, resetLayout } = useWidgetGrid()
+  const { layout, gridRef, draggingId, onPointerDown, cycleSize, resetLayout, moveWidget, undoLayout, canUndo } = useWidgetGrid()
+  const [announce, setAnnounce] = useState('')
 
   useEffect(() => {
     if (confirming) cancelRef.current?.focus()
   }, [confirming])
+
+  // Cmd/Ctrl+Z undoes the last layout change while this view is mounted.
+  // Skipped when the user is typing in a field so we don't hijack undo there.
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      const el = document.activeElement
+      const tag = el && el.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return
+      event.preventDefault()
+      undoLayout()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undoLayout])
+
+  // Move a widget by keyboard and announce the new position to screen readers.
+  function handleMove(id, action, title) {
+    const idx = layout.findIndex((item) => item.id === id)
+    const len = layout.length
+    let target
+    if (action === 'first') target = 0
+    else if (action === 'last') target = len - 1
+    else {
+      const delta = action === 'earlier' ? -1 : 1
+      target = idx + delta
+    }
+    if (target < 0 || target > len - 1 || target === idx) return
+    moveWidget(id, action)
+    setAnnounce(title + ' moved to position ' + (target + 1) + ' of ' + len)
+  }
 
   const records = useMemo(
     () => (Array.isArray(history) ? history.map(normaliseRecord).filter(Boolean) : []),
@@ -596,11 +688,11 @@ export default function HistoryView({ history, onClearHistory }) {
       datasets: [
         {
           data: MODEL_KEYS.map((key) => stats.perModel[key]),
-          backgroundColor: [palette.yellow, palette.dark, palette.blue],
-          borderColor: palette.dark,
-          borderWidth: 2,
-          borderRadius: 10,
-          maxBarThickness: 64,
+          // One hue per model, no outline: the reference keeps bars flat and
+          // rounded instead of drawing a heavy stroke around each one.
+          backgroundColor: [palette.spam, palette.dark, palette.blue],
+          borderRadius: 4,
+          barThickness: 18,
         },
       ],
     }),
@@ -616,12 +708,16 @@ export default function HistoryView({ history, onClearHistory }) {
           {
             label: 'Predictions',
             data: activity.values,
-            borderColor: palette.dark,
-            backgroundColor: 'rgba(0, 113, 227, 0.22)',
-            pointBackgroundColor: palette.yellow,
-            pointBorderColor: palette.dark,
-            pointRadius: activity.values.length > 60 ? 0 : 4,
-            pointHoverRadius: 6,
+            // Neutral data, so the series takes the accent hue rather than a
+            // verdict colour. A light fill keeps a lone point from tinting
+            // the whole plot area.
+            borderColor: palette.blue,
+            backgroundColor: 'rgba(0, 113, 227, 0.12)',
+            pointBackgroundColor: palette.blue,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: activity.values.length > 60 ? 0 : 5,
+            pointHoverRadius: 7,
             borderWidth: 2,
             tension: 0.3,
             fill: true,
@@ -680,7 +776,7 @@ export default function HistoryView({ history, onClearHistory }) {
   const heading = (
     <header className="history-header">
       <h2 id="history-title" className="history-title">
-        HISTORY
+        History
       </h2>
     </header>
   )
@@ -855,17 +951,31 @@ export default function HistoryView({ history, onClearHistory }) {
           <>
             {/* Charts: draggable / resizable widgets */}
             <div className="history-toolbar reveal">
-              <span className="history-toolbar-hint">Drag a chart by its title to reorder; use ⤢ to resize.</span>
-              <button type="button" className="linkbutt" onClick={resetLayout}>
-                Reset layout
-              </button>
+              <span className="history-toolbar-hint">
+                Drag a chart by its title to reorder, or focus it and use the arrow keys; use ⤢ to resize.
+              </span>
+              <div className="history-toolbar-actions">
+                <button
+                  type="button"
+                  className="linkbutt"
+                  onClick={undoLayout}
+                  disabled={!canUndo}
+                >
+                  Undo
+                </button>
+                <button type="button" className="linkbutt" onClick={resetLayout}>
+                  Reset layout
+                </button>
+              </div>
             </div>
+            <p className="visually-hidden" role="status" aria-live="polite">{announce}</p>
             <div className="history-widgets" id="history-widgets" ref={gridRef}>
               {layout.map((item) => {
                 const common = {
                   id: item.id,
                   size: item.size,
                   onPointerDown,
+                  onMoveKey: handleMove,
                   onResize: (id) => {
                     cycleSize(id)
                     setRefadeId(id)
@@ -879,6 +989,18 @@ export default function HistoryView({ history, onClearHistory }) {
                       key={item.id}
                       {...common}
                       title="Verdict distribution"
+                    summary={
+                      (() => {
+                        let spamN = 0
+                        let hamN = 0
+                        for (const row of filtered) {
+                          if (!row.isClassification) continue
+                          if (row.verdict === 'spam') spamN += 1
+                          else if (row.verdict === 'ham') hamN += 1
+                        }
+                        return spamN + ' spam, ' + hamN + ' ham'
+                      })()
+                    }
                       note="Spam and malware classifications only. Process predictions are numbers, not verdicts."
                     >
                       {doughnut.total > 0 ? (
@@ -898,7 +1020,24 @@ export default function HistoryView({ history, onClearHistory }) {
                 }
                 if (item.id === 'by-model') {
                   return (
-                    <ChartCard key={item.id} {...common} title="Predictions by model">
+                  <ChartCard
+                    key={item.id}
+                    {...common}
+                    title="Predictions by model"
+                    summary={
+                      (() => {
+                        let models = 0
+                        for (const key of MODEL_KEYS) {
+                          if (stats.perModel[key] > 0) models += 1
+                        }
+                        return (
+                          plural(stats.total, 'prediction') +
+                          ' across ' +
+                          plural(models, 'model')
+                        )
+                      })()
+                    }
+                  >
                       <Bar
                         data={barData}
                         options={barOptions}
@@ -915,6 +1054,7 @@ export default function HistoryView({ history, onClearHistory }) {
                     key={item.id}
                     {...common}
                     title="Prediction activity over time"
+                    summary={activity ? plural(stats.total, 'prediction') : 'No activity yet'}
                     note={
                       activity
                         ? `Predictions per ${activity.unit}${

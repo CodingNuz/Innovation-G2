@@ -75,13 +75,15 @@ export default function SpamView({onPrediction}) {
           data: rows.map((r) => (r.weight > 0 ? r.weight : 0)),
           // A single colour keeps the legend swatch visible; zero-length bars draw nothing.
           backgroundColor: palette.spam,
-          borderRadius: 6,
+          barThickness: 14,
+          borderRadius: 4,
         },
         {
           label: 'Push toward ham',
           data: rows.map((r) => (r.weight < 0 ? r.weight : 0)),
           backgroundColor: palette.ham,
-          borderRadius: 6,
+          barThickness: 14,
+          borderRadius: 4,
         },
       ],
     }
@@ -94,11 +96,32 @@ export default function SpamView({onPrediction}) {
       x: {
         ...axisOptions,
         title: { display: true, text: 'Contribution to the score', color: palette.dark },
+        suggestedMin: -1,
+        suggestedMax: 1,
+        ticks: {
+          ...axisOptions.ticks,
+          stepSize: 0.25,
+          callback: (value) => value.toFixed(1),
+        },
       },
-      y: { ...axisOptions, grid: { display: false }, ticks: { ...axisOptions.ticks, autoSkip: false } },
+      y: {
+        ...axisOptions,
+        grid: { display: false },
+        ticks: { ...axisOptions.ticks, autoSkip: false, font: { ...axisOptions.ticks.font, size: 12 } },
+      },
     },
     plugins: {
       ...baseOptions.plugins,
+      legend: {
+        ...baseOptions.plugins.legend,
+        labels: {
+          ...baseOptions.plugins.legend.labels,
+          usePointStyle: true,
+          pointStyle: 'rectRounded',
+          boxWidth: 12,
+          boxHeight: 12,
+        },
+      },
       tooltip: {
         ...baseOptions.plugins.tooltip,
         callbacks: {
@@ -130,12 +153,20 @@ export default function SpamView({onPrediction}) {
 
   const splitOptions = {
     ...baseOptions,
-    cutout: '62%',
+    cutout: '70%',
     plugins: {
       ...baseOptions.plugins,
       legend: {
         ...baseOptions.plugins.legend,
         position: 'bottom',
+        labels: {
+          ...baseOptions.plugins.legend.labels,
+          boxWidth: 10,
+          boxHeight: 10,
+          padding: 10,
+          usePointStyle: true,
+          pointStyle: 'rectRounded',
+        },
       },
       tooltip: {
         ...baseOptions.plugins.tooltip,
@@ -149,7 +180,7 @@ export default function SpamView({onPrediction}) {
   return (
     <section className={`view ${result ? 'has-result' : ''}`}>
       <form className="panel detector" onSubmit={check}>
-        <h1 className="detitle">SPAM or HAM ?</h1>
+        <h1 className="detitle">Spam or Ham?</h1>
 
         <label className="fieldlabel-top" htmlFor="spam-input">Message to check</label>
         <div className="inputbox">
@@ -163,7 +194,7 @@ export default function SpamView({onPrediction}) {
                 event.currentTarget.form?.requestSubmit()
               }
             }}
-            placeholder="Insert your email or text message in here..."
+            placeholder="Insert your email or text message here..."
             maxLength={20000}
           />
           {text.length > 0 ? (
@@ -174,24 +205,36 @@ export default function SpamView({onPrediction}) {
         <div className="formbar">
           <div className="formbar-options">
             <div className="pdf-upload">
-              <label htmlFor="spam-pdf">Upload email as a PDF:</label>
+              <label htmlFor="spam-pdf">Upload email as a PDF</label>
               <input
                 id="spam-pdf" type="file" accept=".pdf,application/pdf"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
             </div>
             <div className="examples">
-              <span>Try an example:</span>
+              <span>Try an example</span>
               <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.spam)}>
-                spam
+                Spam
               </button>
               <button type="button" className="linkbutt" onClick={() => setText(EXAMPLES.ham)}>
-                ham
+                Ham
               </button>
             </div>
           </div>
-          <button type="submit" className="butt checkbutt" disabled={!canCheck}>
-            {busy ? '...' : 'Check'}
+          <button
+            type="submit"
+            className="butt checkbutt"
+            disabled={!canCheck}
+            aria-busy={busy ? 'true' : undefined}
+          >
+            {busy ? (
+              <>
+                <span className="btn-spinner" aria-hidden="true" />
+                <span>Checking</span>
+              </>
+            ) : (
+              'Check'
+            )}
           </button>
         </div>
 
@@ -251,6 +294,9 @@ export default function SpamView({onPrediction}) {
                 <div className="chartarea">
                   <Bar data={chartData} options={chartOptions} />
                 </div>
+                <p className="chartnote">
+                  Positive bars pushed the score toward spam; negative bars pulled it toward ham.
+                </p>
               </div>
             ) : null}
 
@@ -259,6 +305,12 @@ export default function SpamView({onPrediction}) {
                 <h3 className="charttitle">Words in this message</h3>
                 <div className="chartarea chartarea-square">
                   <Doughnut data={splitData} options={splitOptions} />
+                  <div className="chart-center-readout">
+                    <span className="chart-center-count">
+                      {result.suspicious_words.length + result.safe_words.length}
+                    </span>
+                    <span className="chart-center-label">words</span>
+                  </div>
                 </div>
               </div>
             ) : null}

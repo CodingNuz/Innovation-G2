@@ -39,16 +39,6 @@ function ChameleonIcon() {
   )
 }
 
-function InfoIcon() {
-  return (
-    <svg className="hp-about-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" strokeWidth="2" />
-      <rect x="11" y="10" width="2" height="7" rx="1" fill="currentColor" />
-      <circle cx="12" cy="7" r="1.4" fill="currentColor" />
-    </svg>
-  );
-}
-
 function MailIcon() {
   return (
     <svg className="hp-mail-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -107,8 +97,8 @@ export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }
           <ChameleonIcon />
         </a>
         <button type="button" className="hp-about" onClick={onAboutClick}>
-          <span>about us</span>
-          <InfoIcon />
+          <span>About Us</span>
+          <i className="fa-solid fa-circle-info" aria-hidden="true" />
         </button>
       </header>
 
@@ -124,14 +114,23 @@ export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }
           </p>
         </section>
 
-        <section className="hp-models" aria-label="Choose a model">
+        <section className="hp-models" aria-labelledby="hp-models-title">
+          <h2 id="hp-models-title" className="hp-models-title visually-hidden">
+            Choose a model
+          </h2>
+
           <div className="hp-hint" aria-hidden="true">
             <span className="hp-hint-text">
               Please choose 1 of
               <br />
               these models
             </span>
-            <svg className="hp-hint-arrow" viewBox="0 0 120 70" focusable="false">
+            <svg
+              className="hp-hint-arrow"
+              viewBox="0 0 120 70"
+              aria-hidden="true"
+              focusable="false"
+            >
               <path
                 d="M2 8C30 -2 62 4 58 26c-3 16-24 14-18-2 5-13 32-10 62 18"
                 fill="none"
@@ -161,11 +160,11 @@ export default function HomePage({ onSelectModel, onAboutClick, onHistoryClick }
             onClick={onHistoryClick}
           >
             <i className="fa-solid fa-clock-rotate-left" aria-hidden="true" />
-            <span>history</span>
+            <span>History</span>
           </button>
         </section>
-        
       </main>
+
 
       <footer className="hp-footer">
         <span>© 2026 SpamChameleon</span>

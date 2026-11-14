@@ -58,6 +58,24 @@ export function useWidgetGrid() {
   const reorderRAF = useRef(null)
   const [draggingId, setDraggingId] = useState(null)
 
+  // Single-step undo: the layout as it was before the most recent change.
+  const previousLayout = useRef(null)
+  const [canUndo, setCanUndo] = useState(false)
+
+  // Apply a layout change while remembering the prior layout for undo. The
+  // producer receives the current layout and returns the next one (or the
+  // same reference when nothing should change).
+  const commit = useCallback((producer) => {
+    setLayout((current) => {
+      const next = producer(current)
+      if (next === current) return current
+      previousLayout.current = current
+      saveLayout(next)
+      return next
+    })
+    setCanUndo(true)
+  }, [])
+
   const getAfterElement = useCallback((x, y, skip) => {
     const grid = gridRef.current
     if (!grid) return null
@@ -100,7 +118,7 @@ export function useWidgetGrid() {
 
     const dragId = w.getAttribute('data-widget')
     const targetId = after === null ? null : after.getAttribute('data-widget')
-    setLayout((current) => {
+    commit((current) => {
       const moving = current.find((item) => item.id === dragId)
       if (!moving) return current
       const rest = current.filter((item) => item.id !== dragId)
@@ -112,7 +130,6 @@ export function useWidgetGrid() {
         if (idx < 0) return current
         next = [...rest.slice(0, idx), moving, ...rest.slice(idx)]
       }
-      saveLayout(next)
       return next
     })
 
@@ -134,7 +151,7 @@ export function useWidgetGrid() {
         })
       })
     })
-  }, [getAfterElement])
+  }, [commit, getAfterElement])
 
   const onPointerDown = useCallback((event, id) => {
     if (event.button !== 0 || event.target.closest('.w-size')) return
@@ -209,22 +226,50 @@ export function useWidgetGrid() {
   }, [positionCard, maybeReorder])
 
   const cycleSize = useCallback((id) => {
-    setLayout((current) => {
-      const next = current.map((item) => {
+    commit((current) => {
+      return current.map((item) => {
         if (item.id !== id) return item
         const i = WIDGET_SIZES.indexOf(item.size || 'default')
         return { ...item, size: WIDGET_SIZES[(i + 1) % WIDGET_SIZES.length] }
       })
-      saveLayout(next)
-      return next
     })
-  }, [])
+  }, [commit])
 
   const resetLayout = useCallback(() => {
     try { window.localStorage.removeItem(STORE_KEY) } catch { /* ignore */ }
-    setLayout(DEFAULT_LAYOUT)
-    saveLayout(DEFAULT_LAYOUT)
+    commit(() => DEFAULT_LAYOUT)
+  }, [commit])
+
+  // Restore the layout from before the most recent change.
+  const undoLayout = useCallback(() => {
+    if (!previousLayout.current) return
+    const restore = previousLayout.current
+    previousLayout.current = null
+    setLayout(restore)
+    saveLayout(restore)
+    setCanUndo(false)
   }, [])
+
+  // Keyboard reorder: move a widget earlier/later by one slot, or to an end.
+  const moveWidget = useCallback((id, action) => {
+    const current = layout
+    const idx = current.findIndex((item) => item.id === id)
+    if (idx < 0) return
+    const len = current.length
+    let target
+    if (action === 'first') target = 0
+    else if (action === 'last') target = len - 1
+    else {
+      const delta = action === 'earlier' ? -1 : 1
+      target = idx + delta
+      if (target < 0 || target > len - 1) return
+    }
+    if (target === idx) return
+    const without = current.filter((item) => item.id !== id)
+    const moving = current[idx]
+    const next = [...without.slice(0, target), moving, ...without.slice(target)]
+    commit(() => next)
+  }, [layout, commit])
 
   useEffect(() => () => {
     if (reorderRAF.current !== null) cancelAnimationFrame(reorderRAF.current)
@@ -244,6 +289,6 @@ export function useWidgetGrid() {
     }
   }, [layout])
 
-  return { layout, gridRef, draggingId, onPointerDown, cycleSize, resetLayout }
+  return { layout, gridRef, draggingId, onPointerDown, cycleSize, resetLayout, moveWidget, undoLayout, canUndo }
 }
 

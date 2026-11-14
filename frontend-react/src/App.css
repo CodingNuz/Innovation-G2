@@ -11,22 +11,23 @@
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', 'Noto Sans',
     system-ui, sans-serif;
   --font-brand: 'Sedgwick Ave', cursive; /* the wordmark and the home page note only */
-  --t-large: 700 34px/41px var(--font);
-  --t-title1: 700 28px/34px var(--font);
-  --t-title2: 700 22px/28px var(--font);
-  --t-title3: 600 20px/25px var(--font);
-  --t-headline: 600 17px/22px var(--font);
-  --t-body: 400 17px/24px var(--font);
-  --t-callout: 400 16px/21px var(--font);
-  --t-subhead: 400 15px/20px var(--font);
-  --t-footnote: 400 13px/18px var(--font);
-  --t-caption: 400 12px/16px var(--font);
+  --t-large: 700 2.125rem/2.5625rem var(--font);
+  --t-title1: 700 1.75rem/2.125rem var(--font);
+  --t-title2: 700 1.375rem/1.75rem var(--font);
+  --t-title3: 600 1.25rem/1.5625rem var(--font);
+  --t-headline: 600 1.0625rem/1.375rem var(--font);
+  --t-body: 400 1.0625rem/1.5rem var(--font);
+  --t-callout: 400 1rem/1.3125rem var(--font);
+  --t-subhead: 400 0.9375rem/1.25rem var(--font);
+  --t-footnote: 400 0.8125rem/1.125rem var(--font);
+  --t-caption: 400 0.75rem/1rem var(--font);
   --tracking-title: -0.02em; /* titles of 20px and up */
 
   /* Text */
   --ink: #1d1d1f; /* 14.9:1 */
   --ink-2: #636366; /* 5.3:1, secondary text and captions */
   --ink-3: #86868b; /* placeholders and disabled text only */
+  --ink-on-bg: #3a3a3c; /* 7.85:1 on the worst-case scrim at 0.86 — text on the bare background */
   --line: rgba(60, 60, 67, 0.18); /* separators */
   --line-strong: rgba(60, 60, 67, 0.29); /* field and button outlines */
 
@@ -80,7 +81,7 @@
   --s-10: 40px;
   --s-12: 48px;
   --field-h: 56px; /* Apple production text field height */
-  --focus-ring-apple: 0 0 0 4px rgba(0, 125, 250, 0.6);
+  --focus-ring-apple: 0 0 0 4px rgba(0, 113, 227, 0.28);
 
   /* Corner radius scale. Nested shapes stay concentric:
      inner radius = outer radius - padding between them. */
@@ -117,6 +118,10 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+html {
+  font-size: 100%;
 }
 
 [hidden] {
@@ -253,6 +258,22 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
+/* In-button activity indicator. The button keeps its width because the label
+   and the spinner occupy the same row. */
+.btn-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .linkbutt {
   display: inline-flex;
   align-items: center;
@@ -286,9 +307,11 @@ summary:focus-visible,
   min-height: 76px;
   padding: var(--s-4) var(--page-margin);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: var(--s-4);
+  position: relative;
 }
 
 .logo {
@@ -336,7 +359,7 @@ summary:focus-visible,
   width: auto;
   min-width: 0;
   min-height: var(--control-h);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
@@ -345,6 +368,10 @@ summary:focus-visible,
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  font: var(--t-headline);
+  cursor: pointer;
+  transition: background-color 0.18s ease;
 }
 .aboutus:hover:not(:disabled) {
   background: var(--surface-card-hover);
@@ -359,43 +386,80 @@ summary:focus-visible,
 
 /* tabs */
 
-.tabs {
+/* app nav — the app's only glass (Liquid Glass) surface. It scrolls
+   horizontally on narrow screens instead of wrapping the page. */
+.appnav {
   display: flex;
-  justify-content: center;
-  gap: var(--s-3);
-  padding: 6px 20px 0;
-  flex-wrap: wrap;
-}
-
-.tab {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  align-items: center;
+  gap: var(--s-1);
+  max-width: min(100%, 720px);
+  margin: 0 auto;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border: 1px solid var(--line-panel);
   border-radius: var(--r-pill);
-  padding: 10px 22px;
-  min-height: var(--control-h);
-  font-size: 16px;
-  font-weight: 700;
-  font-family: var(--font);
-  cursor: pointer;
+  background: rgba(245, 245, 247, 0.72);
+  -webkit-backdrop-filter: var(--panel-blur);
+  backdrop-filter: var(--panel-blur);
+  box-shadow: var(--shadow-control);
+  /* Centred in the header row so it does not add a second row and the
+     header keeps the same 76px height as the Home header. */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+.appnav::-webkit-scrollbar { display: none; }
+
+.appnav-tab {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  min-height: 36px;
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-2);
+  font: var(--t-subhead);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
-.tab:hover {
-  background: var(--surface-card-hover);
-}
-.tab.active {
-  background: var(--surface-card-hover);
-  border-color: var(--ink);
+.appnav-tab:hover { background: rgba(255,255,255,.7); color: var(--ink); }
+.appnav-tab[aria-current='page'] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-control); }
+.appnav-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Below 1000px the centred nav would collide with the logo and status pill,
+   so it drops onto its own row. Both shells keep identical header padding. */
+@media (max-width: 1000px) {
+  .appnav {
+    flex: 1 1 100%;
+    order: 3;
+    max-width: 100%;
+    position: static;
+    transform: none;
+    /* Let the tab strip use the full header width so all five labels are
+       reachable by scrolling rather than being clipped at the edge. */
+    width: 100%;
+    min-width: 0;
+  }
+
+  .appnav-tab {
+    padding: 0 var(--s-3);
+  }
 }
 
 /* main area */
 
 .main {
   position: relative;
-  flex: 1;
+  /* The footer uses margin-top:auto to pin itself to the bottom, so main
+     must not also grow and eat that space. */
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -499,7 +563,7 @@ textarea {
 }
 textarea::placeholder,
 input::placeholder {
-  color: var(--ink-3);
+  color: var(--ink-2);
   opacity: 1;
 }
 
@@ -1284,6 +1348,78 @@ input[type='file']::file-selector-button:hover {
   color: var(--ham);
 }
 
+/* A scan that could not be judged is neutral, not green. */
+.stamp.is-unknown {
+  background: var(--fill);
+  border-left-color: var(--ink-3);
+}
+.stamp.is-unknown .stampword { color: var(--ink-2); }
+.stamp.is-unknown .stampbar > span { background: var(--ink-3); }
+
+/* Scan report: facts, per-model votes, then evidence lines. Mirrors the chip
+   strip a spam answer gets, but sized for longer strings. */
+.scanevidence {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.scanfacts,
+.scanvotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+  padding: 0;
+  list-style: none;
+}
+.scanfacts li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  font-size: 13px;
+}
+.scanfact-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.scanfacts strong { font-weight: 600; color: var(--ink); }
+.scanvotes li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.scanvotes li.is-bad { background: var(--spam-tint); border-color: var(--line); color: var(--spam); }
+.scanvotes li.is-good { background: var(--ham-tint); border-color: var(--line); color: var(--ham); }
+.scanvotes li span { font-weight: 400; font-size: 11px; font-variant-numeric: tabular-nums; }
+.scannotes {
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.scannotes li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.scannotes i { margin-top: 2px; color: var(--ink-3); }
+
 .chatinput {
   position: relative;
   display: flex;
@@ -1535,7 +1671,8 @@ input[type='file']::file-selector-button:hover {
 .gauge-chart {
   position: relative;
   width: 220px;
-  height: 130px;
+  /* Tall enough for the thinner 76% cutout arc to keep its curve readable. */
+  min-height: 150px;
 }
 .gauge-readout {
   position: absolute;
@@ -1583,6 +1720,30 @@ input[type='file']::file-selector-button:hover {
 
 .chartarea-square {
   height: 220px;
+}
+
+/* Word count drawn in the middle of the "Words in this message" doughnut,
+   the same way the reference ring shows its percentage in the hole. */
+.chart-center-readout {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  text-align: center;
+}
+.chart-center-count {
+  font: var(--t-title2);
+  line-height: 1;
+  color: var(--ink);
+}
+.chart-center-label {
+  margin-top: 2px;
+  font: var(--t-caption);
+  color: var(--ink-2);
 }
 .chartnote {
   margin: 8px 0 0;
@@ -1633,23 +1794,30 @@ input[type='file']::file-selector-button:hover {
 
 .footer {
   min-height: 60px;
+  margin-top: auto;
   padding: var(--s-4) var(--page-margin);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
   font: var(--t-footnote);
-  color: var(--ink-2);
+  /* Sits on the bare background, so it needs the on-background ink. */
+  color: var(--ink-on-bg);
 }
 .footer p {
   margin: 0;
 }
 .mail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
   color: var(--ink);
   text-decoration: none;
 }
 .mail i {
+  font-size: var(--s-5);
   color: var(--ink-2);
-  margin-right: var(--s-2);
 }
 
 /* about box */
@@ -1828,6 +1996,13 @@ input[type='file']::file-selector-button:hover {
   .main > * {
     animation: none !important;
   }
+
+  /* The spinner still has to read as "working", so it keeps turning, just
+     slowly. Everything else stops. */
+  .btn-spinner {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* Frosted materials become plain opaque surfaces when the reader asks the
@@ -1891,7 +2066,9 @@ input[type='file']::file-selector-button:hover {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(245, 245, 247, 0.84);
+  /* Raised from .84 so text sitting on the bare background clears 4.5:1
+     against the darkest GIF frames. */
+  background: rgba(245, 245, 247, 0.88);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -1903,6 +2080,34 @@ input[type='file']::file-selector-button:hover {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--surface);
+  }
+}
+
+/* Increase Contrast. prefers-contrast is the cross-browser counterpart to
+   prefers-reduced-transparency, which Safari and Firefox never fire. */
+@media (prefers-contrast: more) {
+  .appnav,
+  .detector,
+  .chatpanel,
+  .sidepanel,
+  .history-view,
+  body .hp-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+
+  .hp-card,
+  .history-widget,
+  .inputbox,
+  .linkbutt,
+  .back-home {
+    border-color: var(--ink-3);
+  }
+
+  .hp-bg::after,
+  .view-bg::after {
+    background: rgba(245, 245, 247, 0.97);
   }
 }
 

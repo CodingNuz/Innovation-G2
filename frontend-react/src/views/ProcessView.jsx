@@ -182,7 +182,7 @@ export default function ProcessView({ onPrediction }) {
   return (
     <section className="view view-wide">
       <form className="panel detector" onSubmit={check}>
-        <h1 className="detitle">PROCESS CONTEXT SWITCHES</h1>
+        <h1 className="detitle">Process Context Switches</h1>
         <p className="subtitle">
           Fill in the counters of a running process. The model predicts how many voluntary
           context switches it makes.

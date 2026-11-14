@@ -53,6 +53,7 @@ export const palette = {
 export const baseOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  layout: { padding: 4 },
   animation: { duration: 350 },
   plugins: {
     legend: {
@@ -64,8 +65,18 @@ export const baseOptions = {
       bodyFont: { family: 'system-ui', size: 13 },
       padding: 10,
       cornerRadius: 10,
+      displayColors: true,
+      boxPadding: 4,
     },
   },
+}
+
+/** Semantic ring colours keyed by the app's verdicts so one colour means one thing. */
+export const ringColors = {
+  spam: palette.spam,
+  ham: palette.ham,
+  malware: palette.dark,
+  benign: palette.warn,
 }
 
 /** Axis styling shared by the bar and line charts. */

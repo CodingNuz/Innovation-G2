@@ -33,7 +33,9 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(245, 245, 247, 0.82);
+  /* Raised from .82 so text on the bare background clears 4.5:1 against the
+     darkest GIF frames. See --ink-on-bg in App.css. */
+  background: rgba(245, 245, 247, 0.86);
 }
 
 /* ---------- Header ---------- */
@@ -42,6 +44,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
+  min-height: 76px;
   padding: var(--s-4) var(--page-margin);
 }
 
@@ -54,33 +57,35 @@
 }
 
 .hp-logo-text {
-  font: var(--t-large);
   font-family: var(--font-brand);
   font-weight: 400;
+  font-size: 38px;
   line-height: 1;
   white-space: nowrap;
 }
 
 .hp-logo-icon {
-  font-size: var(--s-6);
+  font-size: 28px;
   width: auto;
   height: auto;
 }
 
 /* Secondary button recipe. The home page has no primary action. */
 .hp-about {
+  width: auto;
+  min-width: 0;
   min-height: var(--control-h);
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  padding: 0 var(--s-5);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
+  padding: 0 var(--s-4);
+  white-space: nowrap;
   background: var(--surface);
   color: var(--ink);
   font: var(--t-headline);
-  white-space: nowrap;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
   cursor: pointer;
   transition: background-color 0.18s ease;
 }
@@ -89,17 +94,9 @@
   background: var(--surface-card-hover);
 }
 
-.hp-about-icon {
-  width: 18px;
-  height: 18px;
-  flex: none;
+.hp-about i {
+  font-size: inherit;
   color: var(--ink-2);
-}
-
-.hp-about i,
-.hp-about-icon {
-  color: var(--ink-2);
-  font-size: var(--s-4);
 }
 
 .hp-about:focus-visible,
@@ -112,20 +109,26 @@
 
 /* ---------- Main layout ---------- */
 .hp-main {
-  flex: 1;
+  /* The footer uses margin-top:auto to pin itself to the bottom, so main
+     must not also grow and eat that space. */
+  flex: 0 0 auto;
   width: 100%;
   max-width: var(--content-w-wide);
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  /* One column: the greeting introduces the panel that follows it, so it
+     comes first in reading order. */
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--s-10);
+  gap: var(--s-8);
   padding: var(--s-6) var(--page-margin) var(--s-8);
 }
 
 /* ---------- Intro (revealed by .reveal from App.css) ---------- */
 .hp-intro {
-  max-width: 40ch;
+  max-width: 60ch;
+  margin-inline: auto;
+  text-align: center;
 }
 
 .hp-welcome {
@@ -140,47 +143,34 @@
 
 .hp-lead {
   margin: 0;
-  max-width: 40ch;
+  max-width: 60ch;
   font: var(--t-callout);
-  color: var(--ink-2);
+  /* On the bare background, so it needs the on-background ink. */
+  color: var(--ink-on-bg);
 }
 
 /* ---------- Model panel ---------- */
 .hp-models {
   position: relative;
   width: 100%;
+  max-width: 980px;
+  /* Room for the handwritten hint above the panel. The main's 32px gap
+     covers most of it; keeping this small stops the Home page from growing
+     taller than the sub-tabs on short viewports. */
+  margin-top: var(--s-6);
   display: flex;
   flex-direction: column;
-  justify-self: end;
-}
-
-.hp-models-group {
-  width: 100%;
-  justify-self: end;
-}
-
-.hp-history {
-  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--s-2);
-  min-height: var(--control-h);
-  margin: var(--s-5) auto 0;
-  padding: 0 var(--s-5);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--ink);
-  font: var(--t-headline);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 0.18s ease;
 }
 
-.hp-history:hover {
-  background: var(--surface-card-hover);
+.hp-models-title {
+  font: var(--t-title3);
+  letter-spacing: var(--tracking-title);
+  margin: 0 0 var(--s-4);
+  text-align: center;
 }
 
+/* Handwritten "choose a model" hint restored from the previous design. */
 .hp-hint {
   position: absolute;
   left: 4%;
@@ -208,23 +198,43 @@
   margin-bottom: var(--s-1);
 }
 
+.hp-history {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: var(--control-h);
+  margin: var(--s-5) auto 0;
+  padding: 0 var(--s-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-headline);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.hp-history:hover {
+  background: var(--surface-card-hover);
+}
+
 .hp-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--pad-panel);
   padding: var(--pad-panel);
-  /* The grouped box behind the four cards. Apple inset-grouped style: a
-     quiet secondary-system fill with a hairline edge, with the white cards
-     sitting on top of it. Corners stay concentric with the cards:
+  /* The group behind the four cards. Apple's inset-grouped pattern is a
+     quiet fill, not a second floating box: no border, no shadow, no blur.
+     The cards are the only bordered level, which keeps one edge per group.
+     Corners stay concentric with the cards:
      18px card radius + 16px padding = 34px panel radius. */
   max-width: 980px;
+  width: 100%;
   margin-inline: auto;
-  border: 1px solid var(--hairline);
   border-radius: calc(var(--r-lg) + var(--pad-panel));
-  background: var(--surface-panel);
-  -webkit-backdrop-filter: var(--panel-blur);
-  backdrop-filter: var(--panel-blur);
-  box-shadow: var(--shadow-tile);
+  background: var(--surface-card-hover);
 }
 
 /* ---------- Cards ---------- */
@@ -243,7 +253,7 @@
   font: var(--t-body);
   text-align: left;
   cursor: pointer;
-  transition: background-color .344s ease, box-shadow .3s ease,
+  transition: background-color .2s ease, box-shadow .3s ease,
               transform .3s cubic-bezier(0, 0, .5, 1), border-color .2s ease;
 }
 
@@ -252,6 +262,11 @@
   box-shadow: 8px 12px 24px 0 rgba(0, 0, 0, .12);
   border-color: var(--ink-2);
   transform: translateY(-2px);
+}
+
+.hp-card:active {
+  background: var(--surface-card-hover);
+  transform: translateY(0) scale(.985);
 }
 
 .hp-card:focus-visible {
@@ -290,6 +305,10 @@
 
 /* ---------- Footer ---------- */
 .hp-footer {
+  min-height: 60px;
+  /* Pin to the bottom of the shell. The sub-tab footer does the same, so
+     switching tabs never moves the footer even when Home is taller. */
+  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -297,7 +316,8 @@
   gap: var(--s-2) var(--s-4);
   padding: var(--s-4) var(--page-margin);
   font: var(--t-footnote);
-  color: var(--ink-2);
+  /* Sits on the bare background, so it needs the on-background ink. */
+  color: var(--ink-on-bg);
 }
 
 .hp-email {
@@ -317,8 +337,6 @@
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .hp-main {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
     gap: var(--s-8);
     padding-top: var(--s-4);
   }
@@ -327,13 +345,14 @@
     max-width: 100%;
   }
 
-  .hp-models {
-    justify-self: stretch;
-  }
-
+  /* Let the hint flow above the panel instead of overlapping the intro. */
   .hp-hint {
     position: static;
     margin: 0 0 var(--s-2) var(--s-1);
+  }
+
+  .hp-models {
+    margin-top: 0;
   }
 }
 
@@ -365,7 +384,7 @@
   }
 
   .hp-logo-text {
-    font: var(--t-title1);
+    font-size: 24px;
     font-family: var(--font-brand);
     font-weight: 400;
     line-height: 1;

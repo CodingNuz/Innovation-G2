@@ -8,11 +8,11 @@
   min-width: 0;
   padding: var(--s-6);
 
-  background: var(--surface-panel);
-  -webkit-backdrop-filter: var(--panel-blur);
-  backdrop-filter: var(--panel-blur);
-  border: 1px solid var(--line-panel);
-  box-shadow: var(--shadow-panel);
+  /* A content container, so it is a plain surface. Apple's guidance keeps
+     Liquid Glass for the floating functional layer, which is the nav. */
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-tile);
   border-radius: var(--r-panel);
 }
 
@@ -185,10 +185,12 @@
 }
 .history-chart-area {
   position: relative;
-  height: 260px;
+  height: 240px;
   padding: var(--s-3);
   background: var(--surface-card);
-  border: 1px solid var(--line-strong);
+  /* A whisper-thin edge: the widget already carries a border, so a strong
+     one here would read as a box inside a box. */
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
 }
 .history-chart-note {
@@ -365,16 +367,17 @@
   white-space: normal;
 }
 .history-col-date {
-  width: 19%;
+  /* Wide enough for "Nov 14, 2026, 10:24" on one line in the mono face. */
+  width: 23%;
 }
 .history-col-model {
-  width: 12%;
+  width: 11%;
 }
 .history-col-result {
-  width: 17%;
+  width: 15%;
 }
 .history-col-prob {
-  width: 12%;
+  width: 11%;
 }
 .history-col-input {
   width: 28%;
@@ -408,6 +411,27 @@
   background: var(--ham-tint);
   color: var(--ham);
   border-color: transparent;
+}
+/* The Model column is always neutral and visibly quieter than the coloured
+   verdict chips: same pill, but it just sits on the grouped fill. */
+.history-badge.is-model {
+  background: var(--fill);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font: var(--t-caption);
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: var(--s-1) var(--s-2);
+}
+.history-badge.is-model i {
+  color: var(--ink-2);
+}
+/* Badges must stay on one line and never overflow the column at any width. */
+.history-badge {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .history-verdict {
   font-weight: 600;

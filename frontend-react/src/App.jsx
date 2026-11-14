@@ -73,6 +73,30 @@ export default function App() {
     }
   }, [])
 
+  // Keyboard shortcuts: "1".."5" jump to the matching tab. Ignored while the
+  // user is typing in a form control or holding a modifier key.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      if (event.key >= '1' && event.key <= '5') {
+        const entry = TABS[Number(event.key) - 1]
+        if (entry) setTab(entry.id)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [setTab])
+
   const Active = TABS.find((entry) => entry.id === tab)?.component
 
   return (
@@ -121,9 +145,24 @@ export default function App() {
                 className="butt aboutus"
                 onClick={() => setAboutOpen(true)}
               >
-                about us <i className="fa-solid fa-circle-info" aria-hidden="true" />
+                About Us <i className="fa-solid fa-circle-info" aria-hidden="true" />
               </button>
             </div>
+
+          <nav className="appnav" aria-label="Sections">
+            {TABS.map((entry) => (
+              <button
+                type="button"
+                key={entry.id}
+                className="appnav-tab"
+                aria-current={tab === entry.id ? 'page' : undefined}
+                onClick={() => setTab(entry.id)}
+              >
+                <i className={entry.icon} aria-hidden="true" />
+                <span>{entry.label}</span>
+              </button>
+            ))}
+          </nav>
           </header>
 
           <main className="main" id="top">

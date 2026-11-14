@@ -5,7 +5,7 @@ import { baseOptions, palette } from '../charts/setup'
 
 export default function GaugeChart({
   value,
-  caption,
+  caption = 'probability',
   color = palette.spam,
   label = 'Probability',
 }) {
@@ -19,10 +19,10 @@ export default function GaugeChart({
         data: [filled, 100 - filled],
         backgroundColor: [color, palette.track],
         borderWidth: 0,
-        borderRadius: 12,
+        borderRadius: 3,
         circumference: 180,
         rotation: -90,
-        cutout: '72%',
+        cutout: '76%',
       },
     ],
   }
