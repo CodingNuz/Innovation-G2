@@ -451,7 +451,7 @@ function detailFields(row) {
 function ChartCard({ id, title, size, summary, note, children, onPointerDown, onResize, refade, onMoveKey }) {
   return (
     <section
-      className={`history-widget history-chart-card reveal size-${size}${refade ? ' refade' : ''}`}
+      className={`history-widget history-chart-card size-${size}${refade ? ' refade' : ''}`}
       data-widget={id}
     >
       <div
@@ -1087,7 +1087,11 @@ export default function HistoryView({ history, onClearHistory }) {
               <h3 id="history-list-title" className="history-section-title">
                 Individual predictions
               </h3>
-              <div className="history-table-wrap reveal">
+              {/* The table is the primary content here, so it must never
+                  wait for a scroll reveal: resizing a chart pushes it further
+                  down the page and an opacity:0 wrapper reads as a missing
+                  table. */}
+              <div className="history-table-wrap">
                 <table className="history-table">
                   <caption className="visually-hidden">
                     Prediction history, newest first

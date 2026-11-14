@@ -171,7 +171,6 @@ export function useWidgetGrid() {
     dragged.current = w
     setDraggingId(id)
     w.classList.add('is-dragging')
-    w.setPointerCapture(event.pointerId)
     w.style.width = box.width + 'px'
     w.style.height = box.height + 'px'
     w.style.left = box.left + 'px'
@@ -179,8 +178,13 @@ export function useWidgetGrid() {
     w.style.transition = 'none'
     positionCard(w)
 
+    // Listen on window, not on the card. Reordering calls appendChild on the
+    // grid children mid-drag, so pointer events can stop reaching the card
+    // itself. A stuck pointerup leaves the widget in position:fixed forever,
+    // which collapses the grid and hides the table below it.
     function handleMove(e) {
       if (!dragged.current) return
+      if (s.pointerId !== null && e.pointerId !== s.pointerId) return
       s.ptrX = e.clientX
       s.ptrY = e.clientY
       positionCard(w)
@@ -188,18 +192,26 @@ export function useWidgetGrid() {
     }
 
     function cleanup() {
-      w.removeEventListener('pointermove', handleMove)
-      w.removeEventListener('pointerup', handleUp)
-      w.removeEventListener('pointercancel', handleUp)
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+      window.removeEventListener('blur', handleUp)
       if (reorderRAF.current !== null) {
         cancelAnimationFrame(reorderRAF.current)
         reorderRAF.current = null
       }
-      try { w.releasePointerCapture(s.pointerId) } catch { /* already released */ }
+      s.pointerId = null
     }
 
     function handleUp() {
       cleanup()
+      // React may have re-rendered the list while dragging. If this node is
+      // no longer in the document, just clear the drag state and stop.
+      if (!w.isConnected) {
+        dragged.current = null
+        setDraggingId(null)
+        return
+      }
       const floatBox = w.getBoundingClientRect()
       w.classList.remove('is-dragging')
       w.style.width = w.style.height = w.style.left = w.style.top = ''
@@ -219,9 +231,10 @@ export function useWidgetGrid() {
       }
     }
 
-    w.addEventListener('pointermove', handleMove)
-    w.addEventListener('pointerup', handleUp)
-    w.addEventListener('pointercancel', handleUp)
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    window.addEventListener('blur', handleUp)
     event.preventDefault()
   }, [positionCard, maybeReorder])
 
