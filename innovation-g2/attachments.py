@@ -137,13 +137,7 @@ def detect_kind(data: bytes, filename: str = "") -> str:
     # Ask the same router the scan engine uses, so a format is never rejected
     # here and accepted there. It never executes the bytes.
     try:
-        import sys
-        from pathlib import Path
-        folder = str(Path(__file__).resolve().parent.parent
-                     / "spam_malware_detection_model")
-        if folder not in sys.path:
-            sys.path.insert(0, folder)
-        from malware_engine import router
+        from malware_engine.inference import router
         detected = router.detect_format(data)
     except Exception:
         detected = "unknown"

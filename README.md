@@ -144,7 +144,7 @@ keeps the request small.
 
 ```bash
 cd innovation-g2 && python -m pytest test_api.py
-cd spam_malware_detection_model && python -m pytest test_model.py
+cd spam_malware_detection_model && python -m pytest
 ```
 
 ## Models
@@ -168,7 +168,7 @@ Every training file is rebuilt from the raw Kaggle downloads by one script:
 
 ```bash
 python spam_malware_detection_model/build_datasets.py         # merge raw data
-python spam_malware_detection_model/spam/clean_spam_dataset.py # clean the text
+python spam_malware_detection_model/data/clean_spam.py         # clean the text
 python spam_malware_detection_model/combined_model.py          # train and evaluate
 ```
 

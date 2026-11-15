@@ -14,7 +14,7 @@ loguru
 httpx
 PyMuPDF
 
-# Training and report scripts (combined_model.py, analyze_data.py).
+# Training and report scripts (training/run_all.py, data/analyze.py).
 matplotlib
 
 # Tests (cd innovation-g2 && python -m pytest test_api.py).

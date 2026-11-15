@@ -282,7 +282,7 @@ def run_tool(name: str, args: Dict[str, Any],
                 # Tell the model what the byte-level router decided, so it does
                 # not have to infer the platform from a filename.
                 try:
-                    from malware_engine import router
+                    from malware_engine.inference import router
                     reply["scan_format"] = router.detect_format(attachment.data)
                 except Exception:
                     reply["scan_format"] = "unknown"
