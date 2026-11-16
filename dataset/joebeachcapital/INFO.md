@@ -24,7 +24,7 @@
   `kaggle datasets download -d joebeachcapital/windows-malwares --unzip -p dataset/joebeachcapital`
   `kaggle datasets download -d joebeachcapital/tuandromd --unzip -p dataset/joebeachcapital`
 - `PE_Header.csv` labels the `Type` column: 0 = benign, 1 to 6 = malware
-  family. It is merged in `build_datasets.py` with
+  family. It is merged in `data/build_all.py` with
   `mauricio/dataset_malwares.csv` on the 51 feature columns the two files share,
   giving the training file `dataset/malware_pe_windows.csv`
   (39,669 rows, 50 features + label).

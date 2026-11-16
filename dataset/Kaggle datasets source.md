@@ -33,7 +33,7 @@ Some downloads arrive under the author's own file names. They were renamed to
 the names used here (`spam.csv` to `sms_master.csv`, `dataset.csv` to
 `drebin-215-dataset-5560malware-9476-benign.csv`, `CEAS_08.csv` to
 `email_ceas.csv`, and so on) so the column names and file names match what
-`build_datasets.py` expects. Each source folder has an `INFO.md` with the
+`data/build_all.py` expects. Each source folder has an `INFO.md` with the
 details.
 
 ## Sources that were downloaded and rejected

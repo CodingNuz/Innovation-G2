@@ -21,5 +21,5 @@
   is numeric: 0 = ham, 1 = spam.
 - Cited as Almeida, Hidalgo and Yamakami (2011).
 - This is the reference SMS corpus in the project. Its rows are read first in
-  `build_datasets.py`, so a message that also appears in the smishing download
+  `data/build_all.py`, so a message that also appears in the smishing download
   is counted as `sms_master`.

@@ -18,7 +18,7 @@
 - The label column is `class`: `B` = benign, `S` = malware.
 - 215 binary features: Android permissions, API calls, intents and
   transact/bindService style IPC markers.
-- `build_datasets.py` turns this into the training file
+- `data/build_all.py` turns this into the training file
   `dataset/saurabhshahane/malware_android_drebin.csv` (7,257 rows, 215 features + label).
   Feature-identical rows are dropped: 7,779 rows were duplicates of each other.
 - A second set from the same author, `saurabhshahane/android-permission-dataset`,

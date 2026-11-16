@@ -9,7 +9,6 @@ joblib
 python-multipart
 pefile
 androguard
-lief
 loguru
 httpx
 PyMuPDF

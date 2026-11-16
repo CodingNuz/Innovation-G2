@@ -16,7 +16,7 @@
 - Downloaded with:
   `kaggle datasets download -d ankit1743/android-malware-detection-dataset --unzip -p dataset/ankit1743`
 - The label column is `Result`: 0 = benign, 1 = malware (NATICUSdroid).
-- `build_datasets.py` turns this into the training file
+- `data/build_all.py` turns this into the training file
   `dataset/ankit1743/malware_android_permissions.csv` (7,379 rows, 86 permission
   features + label). Feature-identical rows are dropped: 21,953 rows were
   duplicates, and 96 groups disagreed about the label and were resolved by

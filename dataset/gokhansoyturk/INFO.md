@@ -18,7 +18,7 @@
 - Only `text` and `label` are read; the extra columns describe the source of
   each row inside the download.
 - The download repeats the UCI SMS Spam Collection: 5,081 of the 5,197 rows in
-  `uciml/sms_master.csv` also appear here (97.8%). `build_datasets.py` reads
+  `uciml/sms_master.csv` also appear here (97.8%). `data/build_all.py` reads
   `sms_master.csv` first, so those messages are counted once and the remaining
   66,650 rows of this file enter the training data as `sms_smishing_kaggle`.
 - Label convention: 0 = legitimate, 1 = spam/smishing.

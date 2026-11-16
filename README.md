@@ -167,9 +167,10 @@ Training code, data processing and instructions:
 Every training file is rebuilt from the raw Kaggle downloads by one script:
 
 ```bash
-python spam_malware_detection_model/build_datasets.py         # merge raw data
-python spam_malware_detection_model/data/clean_spam.py         # clean the text
-python spam_malware_detection_model/combined_model.py          # train and evaluate
+cd spam_malware_detection_model
+python -m data.build_all         # merge raw data
+python -m data.clean_spam        # clean the text
+python -m training.run_all       # train and evaluate
 ```
 
 Each task compares several models or settings and ships the best one; the
