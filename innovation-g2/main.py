@@ -4,15 +4,14 @@ Run:  cd innovation-g2 && python main.py     (binds 127.0.0.1:3000)
 Chat uses the LLM at LLM_BASE_URL / LLM_API_KEY / LLM_MODEL (see agent.py).
 """
 
+import base64
+import binascii
 import json
 import queue as queue_module
 import sys
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional
-
-import base64
-import binascii
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -304,18 +303,6 @@ def malware_platforms():
     return predict.malware_platforms()
 
 
-@app.get("/api/malware/features")
-def malware_features(platform: Optional[str] = None):
-    """Feature columns for one platform, or for every platform."""
-    try:
-        if platform:
-            return {platform: predict.malware_feature_names(platform)}
-        return {name: predict.malware_feature_names(name)
-                for name in predict.malware_platforms()}
-    except ValueError as error:
-        raise HTTPException(400, str(error))
-
-
 @app.get("/api/malware/schema")
 def malware_schema(platform: Optional[str] = None):
     """Per-feature kind, min, max and median, for building a form."""
@@ -344,12 +331,6 @@ def predict_process(request: ProcessRequest):
         return predict.predict_process(request.features)
     except ValueError as error:
         raise HTTPException(400, str(error))
-
-
-@app.get("/api/process/features")
-def process_features():
-    """The counters the regression model reads."""
-    return predict.process_feature_names()
 
 
 @app.get("/api/process/schema")

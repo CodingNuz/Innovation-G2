@@ -12,6 +12,7 @@ androguard
 loguru
 httpx
 PyMuPDF
+python-dotenv
 
 # Training and report scripts (training/run_all.py, data/analyze.py).
 matplotlib

@@ -18,14 +18,33 @@ import agent
 import attachments
 import extract
 import predict
+from malware_engine.features import apk_features
 
-# Every chat call needs a configured model server. The tests point at a mock
-# transport, so a placeholder is enough; real values come from the environment.
+# Every chat call needs a configured model server. The tests point at a mock transport and
+# set placeholder values in the environment, so they never use the real .env (which may hold
+# a real key) and never reach a real server.
+LLM_NAMES = {"BASE_URL": "LLM_BASE_URL", "MODEL": "LLM_MODEL",
+             "API_KEY": "LLM_API_KEY", "TIMEOUT": "LLM_TIMEOUT"}
+
+
 @pytest.fixture(autouse=True)
-def configured_llm(monkeypatch):
+def llm(monkeypatch):
     monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     monkeypatch.setenv("LLM_MODEL", "test-model")
     monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.delenv("LLM_TIMEOUT", raising=False)
+
+
+@pytest.fixture
+def set_llm(monkeypatch):
+    """Change LLM settings for the current test: set_llm(API_KEY="") unsets (empty means unset)."""
+    def change(**values):
+        for name, value in values.items():
+            if value in ("", None):
+                monkeypatch.delenv(LLM_NAMES[name], raising=False)
+            else:
+                monkeypatch.setenv(LLM_NAMES[name], str(value))
+    return change
 
 
 # pictures
@@ -104,7 +123,6 @@ def test_large_picture_is_downscaled():
 
 
 def test_chat_sends_a_picture_as_an_image_part(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     sent = []
 
     def handler(request):
@@ -123,7 +141,6 @@ def test_chat_sends_a_picture_as_an_image_part(monkeypatch):
 
 
 def test_chat_offers_the_picture_rules_only_for_an_image(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     sent = []
 
     def handler(request):
@@ -141,7 +158,6 @@ def test_chat_offers_the_picture_rules_only_for_an_image(monkeypatch):
 
 def test_the_picture_rules_ask_for_text_then_the_spam_model(monkeypatch):
     """Assistant's job on an image: read the text, then score it."""
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     sent = []
 
     def handler(request):
@@ -331,7 +347,6 @@ def test_get_attachment_returns_the_summary():
 
 
 def test_chat_offers_file_tools_only_when_a_file_is_attached(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     sent = []
 
     def handler(request):
@@ -354,7 +369,6 @@ def test_chat_offers_file_tools_only_when_a_file_is_attached(monkeypatch):
 
 
 def test_chat_with_a_pdf_runs_the_file_tools(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     attachment = attachments.inspect(pdf_with_text(), "mail.pdf")
     rounds = [
         tool_call_reply("call_1", "get_attachment", {}),
@@ -394,7 +408,6 @@ def test_chat_route_rejects_a_bad_attachment():
 
 
 def test_chat_route_accepts_a_pdf_attachment(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     seen = {}
 
     def fake_chat(prompt, history=None, client=None, on_event=None, attachment=None):
@@ -412,7 +425,6 @@ def test_chat_route_accepts_a_pdf_attachment(monkeypatch):
 
 
 def test_chat_stream_sends_the_attachment_event_first(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = [
         tool_call_reply("call_1", "scan_attachment", {}),
         text_reply("SPAM"),
@@ -464,11 +476,11 @@ def test_spam_rejects_text_with_no_known_word(text):
 
 
 def test_malware_partial_sample_reports_what_was_imputed():
-    columns = client.get("/api/malware/features", params={"platform": "pe_windows"}).json()
-    first = columns["pe_windows"][0]
-    reply = post("malware", {"platform": "pe_windows", "features": {first: 4}}).json()
+    schema = client.get("/api/malware/schema", params={"platform": "pe_windows"}).json()
+    columns = list(schema["pe_windows"]["features"])
+    reply = post("malware", {"platform": "pe_windows", "features": {columns[0]: 4}}).json()
     assert reply["features_given"] == 1
-    assert reply["features_imputed"] == len(columns["pe_windows"]) - 1
+    assert reply["features_imputed"] == len(columns) - 1
 
 
 def test_malware_rejects_unknown_platform_and_unknown_columns():
@@ -607,8 +619,8 @@ def test_spam_upload_keeps_the_original_text_path():
 
 def test_android_tokens_match_each_datasets_column_spelling():
     tokens = set()
-    extract._add_method(tokens, "Ljava/lang/Runtime;", "exec")
-    extract._add_method(tokens, "Lorg/apache/http/client/methods/HttpGet;", "<init>")
+    apk_features._add_method(tokens, "Ljava/lang/Runtime;", "exec")
+    apk_features._add_method(tokens, "Lorg/apache/http/client/methods/HttpGet;", "<init>")
     tokens.update({"android.permission.SEND_SMS", "SEND_SMS", "android.permission.READ_PHONE_STATE"})
     tokens.add("android.intent.action.BOOT_COMPLETED")
 
@@ -624,9 +636,9 @@ def test_android_tokens_match_each_datasets_column_spelling():
         tokens, ["Ljava/lang/Runtime;->exec", "SEND_SMS", "BIND_goodwareTIFICATION_LISTENER_SERVICE"],
         "android_tuandromd")
     assert tuandromd["Ljava/lang/Runtime;->exec"] == 1.0 and tuandromd["SEND_SMS"] == 1.0
-    assert extract.lookup_key("BIND_goodwareTIFICATION_LISTENER_SERVICE",
+    assert apk_features.lookup_key("BIND_goodwareTIFICATION_LISTENER_SERVICE",
                                "android_tuandromd") == "BIND_NOTIFICATION_LISTENER_SERVICE"
-    assert extract.lookup_key("Landroid/location/LocationManager;->getLastKgoodwarewnLocation",
+    assert apk_features.lookup_key("Landroid/location/LocationManager;->getLastKgoodwarewnLocation",
                                "android_tuandromd").endswith("getLastKnownLocation")
 
     permissions = extract.android_features(
@@ -719,9 +731,8 @@ def test_run_tool_reports_bad_arguments_as_an_error_payload():
                                                        "features": "not a dict"})
 
 
-def test_chat_runs_the_tool_and_returns_the_explanation(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
-    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+def test_chat_runs_the_tool_and_returns_the_explanation(set_llm):
+    set_llm(API_KEY="sk-test")
     requests = []
 
     def handler(request):
@@ -755,7 +766,6 @@ def test_chat_runs_the_tool_and_returns_the_explanation(monkeypatch):
 
 
 def test_chat_passes_history_and_survives_a_bad_tool_argument(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = []
 
     def handler(request):
@@ -785,7 +795,6 @@ def test_chat_passes_history_and_survives_a_bad_tool_argument(monkeypatch):
 
 
 def test_chat_stops_after_the_round_limit(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
 
     def handler(request):
         return httpx.Response(200, json=tool_call_reply(
@@ -801,7 +810,6 @@ def test_chat_route_validates_and_reports_an_unreachable_server(monkeypatch):
     assert post("chat", {"prompt": ""}).status_code == 422
     assert post("chat", {}).status_code == 422
 
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
 
     def refuse(request):
         raise httpx.ConnectError("connection refused")
@@ -812,10 +820,8 @@ def test_chat_route_validates_and_reports_an_unreachable_server(monkeypatch):
     assert "cannot reach the model server" in reply.json()["detail"]
 
 
-def test_agent_info_reports_the_server_state(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
-    monkeypatch.setenv("LLM_MODEL", "qwen35-2b-spam")
-    monkeypatch.setenv("LLM_API_KEY", "test-key")
+def test_agent_info_reports_the_server_state(monkeypatch, set_llm):
+    set_llm(MODEL="qwen35-2b-spam")
     monkeypatch.setattr(agent.httpx, "Client", lambda **kwargs: fake_client(
         lambda request: httpx.Response(200, json={"data": [{"id": "qwen35-2b-spam"}]})))
 
@@ -828,28 +834,31 @@ def test_agent_info_reports_the_server_state(monkeypatch):
                               "model_in_use": "qwen35-2b-spam", "model_is_served": True}
 
 
-def test_config_reads_every_setting_from_the_environment(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.com/v1/")
-    monkeypatch.setenv("LLM_MODEL", "my-model")
-    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+def test_config_turns_the_settings_into_the_values_the_client_uses(set_llm):
+    set_llm(BASE_URL="https://llm.example.com/v1/", MODEL="my-model", API_KEY="sk-test", TIMEOUT=42)
     settings = agent.config()
-    assert settings["base_url"] == "https://llm.example.com/v1"
+    assert settings["base_url"] == "https://llm.example.com/v1"      # trailing slash removed
     assert settings["model"] == "my-model"
     assert settings["api_key"] == "sk-test"
+    assert settings["timeout"] == 42.0
 
 
-def test_config_has_no_built_in_host_or_key(monkeypatch):
-    for name in ("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY"):
-        monkeypatch.delenv(name, raising=False)
+def test_an_empty_key_means_no_authorization(set_llm):
+    set_llm(API_KEY="")
+    assert agent.config()["api_key"] is None
+    assert "Authorization" not in agent._headers(agent.config()["api_key"])
+
+
+def test_config_has_no_built_in_host_or_key(set_llm):
+    set_llm(BASE_URL="", MODEL="", API_KEY="")
     settings = agent.config()
     assert settings["base_url"] == ""
     assert settings["model"] == ""
     assert settings["api_key"] is None
 
 
-def test_agent_info_without_config_is_still_a_valid_reply(monkeypatch):
-    for name in ("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY"):
-        monkeypatch.delenv(name, raising=False)
+def test_agent_info_without_config_is_still_a_valid_reply(set_llm):
+    set_llm(BASE_URL="", MODEL="", API_KEY="")
     reply = client.get("/api/agent/info")
     assert reply.status_code == 200
     info = reply.json()
@@ -857,18 +866,47 @@ def test_agent_info_without_config_is_still_a_valid_reply(monkeypatch):
     assert info["model"] == ""
     assert info["auth_configured"] is False
     assert info["server"]["reachable"] is False
+    assert "LLM_BASE_URL" in info["server"]["error"]
 
 
-def test_chat_reports_a_missing_configuration(monkeypatch):
-    monkeypatch.delenv("LLM_BASE_URL", raising=False)
-    monkeypatch.delenv("LLM_MODEL", raising=False)
+def test_the_status_endpoint_never_returns_the_api_key(set_llm):
+    set_llm(API_KEY="sk-super-secret-value")
+    assert "sk-super-secret-value" not in client.get("/api/agent/info").text
+
+
+def test_chat_reports_a_missing_configuration_and_names_the_variables(set_llm):
+    set_llm(BASE_URL="", MODEL="")
     with pytest.raises(agent.LLMUnavailable) as error:
         agent.chat("hi", client=fake_client(lambda request: httpx.Response(200)))
-    assert "LLM_BASE_URL" in str(error.value)
+    assert "LLM_BASE_URL" in str(error.value) and "LLM_MODEL" in str(error.value)
+
+
+def test_an_unset_timeout_uses_the_default_and_a_set_one_is_used(set_llm):
+    assert agent.config()["timeout"] == agent.DEFAULT_TIMEOUT
+    set_llm(TIMEOUT=42)
+    assert agent.config()["timeout"] == 42.0
+
+
+def test_the_env_file_is_git_ignored_and_its_example_is_not():
+    import pathlib
+    import subprocess
+
+    root = pathlib.Path(agent.__file__).resolve().parents[1]
+    ignored = lambda name: subprocess.run(["git", "check-ignore", "-q", name], cwd=root).returncode == 0
+    assert ignored(".env") and not ignored(".env.example")
+
+
+def test_the_example_env_file_lists_every_variable_the_agent_reads():
+    import pathlib
+    import re
+
+    root = pathlib.Path(agent.__file__).resolve().parents[1]
+    example = (root / ".env.example").read_text()
+    for name in LLM_NAMES.values():
+        assert re.search(r"^#?\s*%s=" % name, example, re.M), name
 
 
 def test_agent_info_is_reachable_false_when_the_server_is_down(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
 
     def refuse(request):
         raise httpx.ConnectError("connection refused")
@@ -895,7 +933,6 @@ def test_clean_reply_drops_the_reasoning_block():
 
 
 def test_chat_reports_tool_progress(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     seen = []
     rounds = [
         tool_call_reply("call_1", "check_spam", {"text": "WIN a FREE prize now"}),
@@ -913,7 +950,6 @@ def test_chat_reports_tool_progress(monkeypatch):
 
 
 def test_chat_stream_sends_events_in_order(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = [
         tool_call_reply("call_1", "list_malware_platforms", {}),
         text_reply("<think>ok</think>Four platforms."),
@@ -940,7 +976,6 @@ def test_chat_stream_sends_events_in_order(monkeypatch):
 
 
 def test_chat_stream_reports_an_unreachable_server(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
 
     def refuse(request):
         raise httpx.ConnectError("connection refused")
@@ -957,7 +992,6 @@ def test_chat_stream_reports_an_unreachable_server(monkeypatch):
 def test_chat_stream_rejects_an_empty_prompt():
     assert post("chat/stream", {"prompt": "   "}).status_code == 400
 def test_chat_falls_back_when_the_model_returns_no_text(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = [
         tool_call_reply("call_1", "list_malware_platforms", {}),
     ] + [
@@ -977,7 +1011,6 @@ def test_chat_falls_back_when_the_model_returns_no_text(monkeypatch):
 
 def test_a_round_that_spends_its_budget_on_reasoning_is_asked_again(monkeypatch):
     """Reasoning stays on; only the budget grows on the retry."""
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     budgets = []
     rounds = [
         tool_call_reply("call_1", "check_spam", {"text": "WIN a FREE prize"}),
@@ -1001,7 +1034,6 @@ def test_a_round_that_spends_its_budget_on_reasoning_is_asked_again(monkeypatch)
 
 
 def test_the_retry_keeps_reasoning_enabled(monkeypatch):
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     bodies = []
     rounds = [
         {"choices": [{"finish_reason": "length",
@@ -1020,7 +1052,6 @@ def test_the_retry_keeps_reasoning_enabled(monkeypatch):
 
 def test_the_fallback_reports_the_verdict_from_the_tool(monkeypatch):
     """An exhausted model still tells the user what it decided."""
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
     rounds = [
         tool_call_reply("call_1", "check_spam", {"text": "WIN a FREE prize"}),
     ] + [

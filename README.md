@@ -105,14 +105,15 @@ keys: copy `.env.example` to `.env` (or export the variables) and set:
 | --- | --- |
 | `LLM_BASE_URL` | base URL of any OpenAI-compatible server, e.g. `http://localhost:8000/v1` |
 | `LLM_MODEL` | the model ID that server exposes |
-| `LLM_API_KEY` | its API key (never committed) |
+| `LLM_API_KEY` | its API key (never committed); leave it out for a server that needs none |
 
-`LLM_TIMEOUT` is optional (default 300 seconds). With the variables set,
+`LLM_TIMEOUT` is optional (default 300 seconds). `.env` sits in the repository root and is
+listed in `.gitignore`, so the key stays on your machine. With the variables set,
 `cd innovation-g2 && python main.py` needs nothing else. Without them the API
 still starts and the other tabs work, but a chat request returns a clear
-"model server is not configured" error.
+"model server is not configured" error that names the missing variables.
 `GET /api/agent/info` reports whether the server is reachable and whether
-the configured model is one it serves.
+the configured model is one it serves; it never returns the key.
 
 The chat box also takes one attached file: a PDF, a Windows PE (.exe/.dll), an
 Android APK, a picture (PNG, JPEG, GIF or BMP), or a plain text/email/HTML
