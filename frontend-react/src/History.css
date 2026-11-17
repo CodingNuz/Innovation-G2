@@ -281,7 +281,6 @@
 /* ----- history table ----- */
 
 .history-table-wrap {
-  padding: var(--s-1) var(--s-3);
   background: var(--surface-card);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
@@ -713,4 +712,133 @@
     font: var(--t-title3);
   }
 }
+
+
+/* =========================================
+   SPAMCHAMELEON COLOUR THEME
+   History dashboard
+========================================= */
+
+/* Main dashboard panel */
+.history-view {
+  background: rgba(186, 232, 232, 0.38);
+  color: #272343;
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+/* Statistics cards */
+.history-stat-card {
+  background: #e3f6f5;
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+/* Filter section */
+.history-filters {
+  background: #e3f6f5;
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+/* Chart containers */
+.history-chart-area {
+  background: #e3f6f5;
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+/* History table */
+.history-table-wrap {
+  background: #e3f6f5;
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+.history-table th {
+  background: #bae8e8;
+  color: #272343;
+}
+
+.history-table tbody tr:hover,
+.history-row.is-open td {
+  background: #bae8e8;
+}
+
+/* Sticky details column */
+.history-table thead th:last-child {
+  background: #bae8e8;
+}
+
+.history-table tbody td:last-child {
+  background: #e3f6f5;
+}
+
+.history-table tbody tr:hover td:last-child,
+.history-row.is-open td:last-child {
+  background: #bae8e8;
+}
+
+.history-table td.history-details-cell {
+  background: #e3f6f5;
+}
+
+/* Secondary buttons */
+.history-btn {
+  background: #bae8e8;
+  border-color: rgba(39, 35, 67, 0.2);
+  color: #272343;
+}
+
+.history-btn:hover:not(:disabled) {
+  background: #a0dada;
+}
+
+/* Primary action buttons */
+.history-actions .history-btn:first-child,
+.history-empty .history-btn {
+  background: #ffd803;
+  border-color: transparent;
+  color: #272343;
+}
+
+.history-actions .history-btn:first-child:hover:not(:disabled),
+.history-empty .history-btn:hover:not(:disabled) {
+  background: #e6c300;
+}
+
+/* Disabled buttons */
+.history-btn:disabled {
+  background: #e3f6f5;
+  color: #777777;
+  border-color: rgba(39, 35, 67, 0.12);
+}
+
+/* Preserve red warning and delete actions */
+.history-btn-danger {
+  background: #e3f6f5;
+  color: var(--spam);
+}
+
+.history-btn-danger:hover:not(:disabled) {
+  background: var(--spam-tint);
+}
+
+.history-btn-confirm {
+  background: var(--spam);
+  border-color: var(--spam);
+  color: white;
+}
+
+/* Confirmation message */
+.history-confirm {
+  background: var(--spam-tint);
+  color: var(--spam);
+}
+
+/* Model count labels */
+.history-model-counts li {
+  background: #e3f6f5;
+}
+
+/* Empty state remains visually consistent */
+.history-empty {
+  color: #272343;
+}
+
 

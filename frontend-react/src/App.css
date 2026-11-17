@@ -2111,3 +2111,184 @@ input[type='file']::file-selector-button:hover {
   }
 }
 
+
+/* =========================================
+   SPAMCHAMELEON BRAND COLOUR THEME
+   Spam, Malware, Process and Assistant views
+========================================= */
+
+:root {
+  /* Main text */
+  --ink: #272343;
+  --ink-2: #55546a;
+  --ink-3: #77768a;
+  --ink-on-bg: #272343;
+
+  /* Panels and cards */
+  --surface-panel: rgba(186, 232, 232, 0.38);
+  --surface-card: #e3f6f5;
+  --surface-card-hover: #bae8e8;
+
+  /* Primary buttons and accents */
+  --accent: #ffd803;
+  --accent-hover: #e6c300;
+  --accent-active: #d6b600;
+  --accent-soft: #bae8e8;
+  --accent-ink: #272343;
+  --accent-text: #272343;
+  --accent-tint: #e3f6f5;
+
+  /* Focus */
+  --focus-ring: 0 0 0 4px rgba(255, 216, 3, 0.35);
+  --focus-ring-apple: 0 0 0 4px rgba(255, 216, 3, 0.35);
+
+  /* Borders and subtle fills */
+  --line: rgba(39, 35, 67, 0.15);
+  --line-strong: rgba(39, 35, 67, 0.25);
+  --hairline: rgba(39, 35, 67, 0.18);
+  --fill: rgba(186, 232, 232, 0.45);
+  --track: rgba(39, 35, 67, 0.15);
+
+  /* Neutral chart colour */
+  --teal: #008b8b;
+
+  /* Keep the existing red, green and warning colours
+     for security verdicts and alerts. */
+}
+
+/* Main detector panels */
+.detector,
+.chatpanel {
+  background: rgba(186, 232, 232, 0.38);
+  border-color: rgba(39, 35, 67, 0.18);
+  color: #272343;
+}
+
+/* Result panel */
+.sidepanel {
+  background: rgba(186, 232, 232, 0.38);
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+/* Text and file input areas */
+.inputbox,
+.chatinput textarea,
+.featurelist,
+.uploadscan,
+.chatlog,
+.chartarea,
+.answer,
+.chatmsg-bot,
+.attachchip,
+.resultnote {
+  background: #e3f6f5;
+  color: #272343;
+}
+
+/* Form fields */
+.textinput,
+.select {
+  background: #e3f6f5;
+  color: #272343;
+}
+
+/* Selected feature chips */
+.chip {
+  background: #e3f6f5;
+  color: #272343;
+}
+
+.chip:has(input:checked) {
+  background: #bae8e8;
+}
+
+/* Primary buttons */
+.butt {
+  background: #ffd803;
+  color: #272343;
+}
+
+.butt:hover:not(:disabled) {
+  background: #e6c300;
+}
+
+.butt:active:not(:disabled) {
+  background: #d6b600;
+}
+
+.butt:disabled {
+  background: #e3f6f5;
+  color: #77768a;
+}
+
+/* Secondary buttons */
+.closebutt,
+.clipbutt,
+.linkbutt {
+  background: #bae8e8;
+  color: #272343;
+  border-color: rgba(39, 35, 67, 0.2);
+}
+
+.closebutt:hover:not(:disabled),
+.clipbutt:hover:not(:disabled),
+.linkbutt:hover:not(:disabled) {
+  background: #a0dada;
+}
+
+/* File upload button */
+input[type='file']::file-selector-button {
+  background: #bae8e8;
+  color: #272343;
+  border-color: rgba(39, 35, 67, 0.2);
+}
+
+input[type='file']::file-selector-button:hover {
+  background: #a0dada;
+}
+
+/* Assistant user messages */
+.chatmsg-user {
+  background: #bae8e8;
+  color: #272343;
+}
+
+/* App navigation */
+.appnav {
+  background: rgba(186, 232, 232, 0.72);
+  border-color: rgba(39, 35, 67, 0.15);
+}
+
+.appnav-tab {
+  color: #55546a;
+}
+
+.appnav-tab:hover,
+.appnav-tab[aria-current='page'] {
+  color: #272343;
+}
+
+.appnav-tab[aria-current='page'] {
+  background: #e3f6f5;
+}
+
+/* About Us button */
+.aboutus {
+  background: #ffd803;
+  color: #272343;
+  border-color: transparent;
+}
+
+.aboutus:hover:not(:disabled),
+.aboutus:active:not(:disabled) {
+  background: #e6c300;
+}
+
+.aboutus i {
+  color: #272343;
+}
+
+/* Keep the existing security verdict colours:
+   SPAM = red, HAM/benign = green, warnings = orange. */
+
+
